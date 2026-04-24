@@ -82,6 +82,7 @@ RUN apt-get update && \
         postgresql-client \
         gettext-base \
         curl \
+        openssl \
         ca-certificates \
         libpq5 \
         "${CURL_RUNTIME_PKG}" \

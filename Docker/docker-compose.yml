@@ -18,6 +18,10 @@ services:
       - SECRET_KEY=${APP_SECRET_KEY:-your_strong_default_secret_key_here} 
       - MAX_UPLOAD_MB=32 # Example: Set max upload size to 32MB 
       - NGINX_MAX_BODY_SIZE_VALUE=32M # For Nginx, ensure this matches MAX_UPLOAD_MB in concept (e.g., 32M)
+      - NGINX_ENABLE_HTTPS=${NGINX_ENABLE_HTTPS:-false}
+      - NGINX_SERVER_NAME=${NGINX_SERVER_NAME:-localhost}
+      - NGINX_SSL_CERT_PATH=${NGINX_SSL_CERT_PATH:-/etc/nginx/certs/fullchain.pem}
+      - NGINX_SSL_KEY_PATH=${NGINX_SSL_KEY_PATH:-/etc/nginx/certs/privkey.pem}
       # OIDC SSO Configuration (User needs to set these based on their OIDC provider)
       - OIDC_PROVIDER_NAME=${OIDC_PROVIDER_NAME:-oidc}
       - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-} # e.g., your_oidc_client_id_from_provider

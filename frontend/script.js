@@ -3252,6 +3252,10 @@ async function openEditModal(warranty) {
     if (editModelNumberInput) {
         editModelNumberInput.value = warranty.model_number || '';
     }
+    const editAdditionalNotificationEmailInput = document.getElementById('editAdditionalNotificationEmail');
+    if (editAdditionalNotificationEmailInput) {
+        editAdditionalNotificationEmailInput.value = warranty.additional_notification_email || '';
+    }
     document.getElementById('editPurchaseDate').value = warranty.purchase_date.split('T')[0];
     // Populate new duration fields
     document.getElementById('editWarrantyDurationYears').value = warranty.warranty_duration_years || 0;
@@ -3944,6 +3948,10 @@ async function handleFormSubmit(event) { // Made async to properly await paperle
     const modelNumberInput = document.getElementById('modelNumber');
     if (modelNumberInput && modelNumberInput.value.trim() !== '') {
         formData.set('model_number', modelNumberInput.value.trim());
+    }
+    const additionalNotificationEmailInput = document.getElementById('additionalNotificationEmail');
+    if (additionalNotificationEmailInput) {
+        formData.set('additional_notification_email', additionalNotificationEmailInput.value.trim());
     }
     
     // Handle warranty type - use custom value if "other" is selected
@@ -6456,6 +6464,8 @@ function saveWarranty() {
         }
     }
     formData.append('warranty_type', warrantyTypeValue);
+    const editAdditionalNotificationEmail = document.getElementById('editAdditionalNotificationEmail');
+    formData.append('additional_notification_email', editAdditionalNotificationEmail ? editAdditionalNotificationEmail.value.trim() : '');
     
     // Add selected Paperless documents for edit form
     const selectedEditPaperlessProductPhoto = document.getElementById('selectedEditPaperlessProductPhoto');

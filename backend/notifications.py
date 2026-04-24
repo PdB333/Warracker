@@ -70,6 +70,14 @@ def set_apprise_handler(handler):
     APPRISE_AVAILABLE = handler is not None
     apprise_handler = handler
 
+
+def _normalize_email_address(email):
+    """Normalize email addresses for recipient grouping/deduplication."""
+    if not email:
+        return None
+    normalized = str(email).strip().lower()
+    return normalized or None
+
 def _get_orphan_warranty_recipient(conn):
     """
     Pick a fallback recipient for warranties detached from deleted users.
@@ -155,11 +163,13 @@ def get_expiring_warranties(get_db_connection, release_db_connection):
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT
+                    w.id,
                     u.id, -- Select user_id
                     u.email,
                     u.first_name,
                     w.product_name,
                     w.expiration_date,
+                    w.additional_notification_email,
                     COALESCE(up.expiring_soon_days, 30) AS expiring_soon_days
                 FROM
                     warranties w
@@ -177,14 +187,16 @@ def get_expiring_warranties(get_db_connection, release_db_connection):
 
             expiring_warranties = []
             for row in cur.fetchall():
-                user_id, email, first_name, product_name, expiration_date, expiring_soon_days = row
+                warranty_id, user_id, email, first_name, product_name, expiration_date, additional_notification_email, expiring_soon_days = row
                 expiration_date_str = expiration_date.strftime('%Y-%m-%d')
                 expiring_warranties.append({
+                    'warranty_id': warranty_id,
                     'user_id': user_id,
                     'email': email,
                     'first_name': first_name or 'User',  # Default if first_name is NULL
                     'product_name': product_name,
                     'expiration_date': expiration_date_str,
+                    'additional_notification_email': additional_notification_email,
                 })
 
             orphan_recipient = _get_orphan_warranty_recipient(conn)
@@ -202,8 +214,10 @@ def get_expiring_warranties(get_db_connection, release_db_connection):
 
                     orphan_cur.execute("""
                         SELECT
+                            w.id,
                             w.product_name,
-                            w.expiration_date
+                            w.expiration_date,
+                            w.additional_notification_email
                         FROM
                             warranties w
                         WHERE
@@ -216,14 +230,16 @@ def get_expiring_warranties(get_db_connection, release_db_connection):
                     """, (today, today, orphan_days))
 
                     orphan_rows = orphan_cur.fetchall()
-                    for product_name, expiration_date in orphan_rows:
+                    for warranty_id, product_name, expiration_date, additional_notification_email in orphan_rows:
                         expiration_date_str = expiration_date.strftime('%Y-%m-%d')
                         expiring_warranties.append({
+                            'warranty_id': warranty_id,
                             'user_id': orphan_recipient['user_id'],
                             'email': orphan_recipient['email'],
                             'first_name': orphan_recipient['first_name'],
                             'product_name': product_name,
                             'expiration_date': expiration_date_str,
+                            'additional_notification_email': additional_notification_email,
                             'is_orphaned': True
                         })
 
@@ -374,23 +390,41 @@ def process_email_notifications(all_warranties, eligible_user_ids, is_manual, ge
     """Process and send email notifications"""
     logger.info(f"Processing email notifications for {len(eligible_user_ids)} eligible users")
     
-    # Group warranties by user
+    # Group warranties by recipient (owner email + optional additional recipient email)
     users_warranties = {}
+
+    def add_recipient_warranty(recipient_email, warranty):
+        normalized_email = _normalize_email_address(recipient_email)
+        if not normalized_email:
+            return
+
+        if normalized_email not in users_warranties:
+            users_warranties[normalized_email] = {
+                'email': normalized_email,
+                'user_id': warranty.get('user_id'),
+                'first_name': warranty.get('first_name') or 'User',
+                'warranties': [],
+                'warranty_ids': set()
+            }
+
+        warranty_id = warranty.get('warranty_id')
+        if warranty_id is not None:
+            if warranty_id in users_warranties[normalized_email]['warranty_ids']:
+                return
+            users_warranties[normalized_email]['warranty_ids'].add(warranty_id)
+        users_warranties[normalized_email]['warranties'].append(warranty)
+
     for warranty in all_warranties:
         user_id = warranty['user_id']
-        email = warranty['email']
-        
+        owner_email = warranty.get('email')
+        additional_email = warranty.get('additional_notification_email')
+
         # Check if user should receive notifications
         if not is_manual and user_id not in eligible_user_ids:
             continue
-            
-        if email not in users_warranties:
-            users_warranties[email] = {
-                'user_id': user_id,
-                'first_name': warranty['first_name'],
-                'warranties': []
-            }
-        users_warranties[email]['warranties'].append(warranty)
+
+        add_recipient_warranty(owner_email, warranty)
+        add_recipient_warranty(additional_email, warranty)
     
     if not users_warranties:
         logger.info("No users to notify via email")
@@ -460,7 +494,8 @@ def process_email_notifications(all_warranties, eligible_user_ids, is_manual, ge
         utc_now = datetime.now(UTC)
         timestamp = int(utc_now.timestamp())
         
-        for email, user_data in users_warranties.items():
+        for email_key, user_data in users_warranties.items():
+            recipient_email = user_data.get('email') or email_key
             user_id_to_check = user_data.get('user_id')
             
             # For manual triggers, check if user has email notifications enabled
@@ -468,24 +503,24 @@ def process_email_notifications(all_warranties, eligible_user_ids, is_manual, ge
                 continue
             
             # For manual triggers, check if we've sent recently
-            if is_manual and email in last_notification_sent:
-                last_sent = last_notification_sent[email]
+            if is_manual and recipient_email in last_notification_sent:
+                last_sent = last_notification_sent[recipient_email]
                 if timestamp - last_sent < 120:
                     continue
             
             msg = format_expiration_email(
-                {'first_name': user_data['first_name'], 'email': email},
+                {'first_name': user_data['first_name'], 'email': recipient_email},
                 user_data['warranties'],
                 get_db_connection,
                 release_db_connection
             )
             try:
-                server.sendmail(smtp_username, email, msg.as_string())
-                last_notification_sent[email] = timestamp
+                server.sendmail(smtp_username, recipient_email, msg.as_string())
+                last_notification_sent[recipient_email] = timestamp
                 emails_sent += 1
-                logger.info(f"Email sent to {email} for {len(user_data['warranties'])} warranties")
+                logger.info(f"Email sent to {recipient_email} for {len(user_data['warranties'])} warranties")
             except Exception as e:
-                logger.error(f"Error sending email to {email}: {e}")
+                logger.error(f"Error sending email to {recipient_email}: {e}")
         
         logger.info(f"Email process completed. Sent {emails_sent} emails")
         server.quit()

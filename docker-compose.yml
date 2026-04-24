@@ -41,6 +41,10 @@ services:
       - WARRACKER_MEMORY_MODE=${WARRACKER_MEMORY_MODE:-optimized} # Options: optimized (default), ultra-light, performance
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-16} # Reduced from 32MB default for memory efficiency
       - NGINX_MAX_BODY_SIZE_VALUE=${NGINX_MAX_BODY_SIZE_VALUE:-16M} # Match upload limit
+      - NGINX_ENABLE_HTTPS=${NGINX_ENABLE_HTTPS:-false}
+      - NGINX_SERVER_NAME=${NGINX_SERVER_NAME:-localhost}
+      - NGINX_SSL_CERT_PATH=${NGINX_SSL_CERT_PATH:-/etc/nginx/certs/fullchain.pem}
+      - NGINX_SSL_KEY_PATH=${NGINX_SSL_KEY_PATH:-/etc/nginx/certs/privkey.pem}
     depends_on:
       warrackerdb:
         condition: service_healthy

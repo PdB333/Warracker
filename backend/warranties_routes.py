@@ -7,6 +7,7 @@ import os
 import json
 import csv
 import io
+import re
 from dateutil.relativedelta import relativedelta
 from dateutil.parser import parse as date_parse
 import mimetypes
@@ -32,6 +33,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 warranties_bp = Blueprint('warranties_bp', __name__)
+NOTIFICATION_EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 
@@ -45,6 +47,21 @@ def convert_decimals(obj):
         return float(obj)
     else:
         return obj
+
+
+def parse_optional_notification_email(value):
+    """Normalize and validate an optional notification email."""
+    if value is None:
+        return None
+
+    email = value.strip()
+    if not email:
+        return None
+
+    if len(email) > 254 or not NOTIFICATION_EMAIL_REGEX.match(email):
+        raise ValueError("Invalid additional notification email address")
+
+    return email
 
 @warranties_bp.route('/warranties', methods=['GET'])
 @token_required
@@ -65,7 +82,7 @@ def get_warranties():
                     w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, w.vendor, w.warranty_type,
                     w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, w.product_photo_path, w.currency,
                     w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number,
+                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number, w.additional_notification_email,
                     CASE
                         WHEN COUNT(c.id) = 0 THEN 'NO_CLAIMS'
                         WHEN BOOL_OR(c.status IN ('Submitted', 'In Progress')) THEN 'OPEN'
@@ -134,7 +151,7 @@ def get_archived_warranties():
                     w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, w.vendor, w.warranty_type,
                     w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, w.product_photo_path, w.currency,
                     w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number,
+                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number, w.additional_notification_email,
                     CASE
                         WHEN COUNT(c.id) = 0 THEN 'NO_CLAIMS'
                         WHEN BOOL_OR(c.status IN ('Submitted', 'In Progress')) THEN 'OPEN'
@@ -250,6 +267,12 @@ def add_warranty():
         vendor = request.form.get('vendor', None)
         warranty_type = request.form.get('warranty_type', None)
         model_number = request.form.get('model_number', None)
+        try:
+            additional_notification_email = parse_optional_notification_email(
+                request.form.get('additional_notification_email')
+            )
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
         
         # Get URL fields for documents
         invoice_url = request.form.get('invoice_url', None)
@@ -441,16 +464,16 @@ def add_warranty():
                     invoice_path, manual_path, other_document_path, product_url, purchase_price, user_id, is_lifetime, notes, vendor, warranty_type,
                     warranty_duration_years, warranty_duration_months, warranty_duration_days, product_photo_path, currency,
                     paperless_invoice_id, paperless_manual_id, paperless_photo_id, paperless_other_id,
-                    invoice_url, manual_url, other_document_url, model_number
+                    invoice_url, manual_url, other_document_url, model_number, additional_notification_email
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
                 product_name, purchase_date, expiration_date,
                 db_invoice_path, db_manual_path, db_other_document_path, product_url, purchase_price, user_id, is_lifetime, notes, vendor, warranty_type,
                 warranty_duration_years, warranty_duration_months, warranty_duration_days, db_product_photo_path, currency,
                 paperless_invoice_id, paperless_manual_id, paperless_photo_id, paperless_other_id,
-                invoice_url, manual_url, other_document_url, model_number
+                invoice_url, manual_url, other_document_url, model_number, additional_notification_email
             ))
             warranty_id = cur.fetchone()[0]
             
@@ -713,6 +736,14 @@ def update_warranty(warranty_id):
             vendor = request.form.get('vendor', None)
             warranty_type = request.form.get('warranty_type', None)
             model_number = request.form.get('model_number', None)
+            additional_notification_email = None
+            if 'additional_notification_email' in request.form:
+                try:
+                    additional_notification_email = parse_optional_notification_email(
+                        request.form.get('additional_notification_email')
+                    )
+                except ValueError as exc:
+                    return jsonify({"error": str(exc)}), 400
             
             # Get URL fields for documents
             invoice_url = request.form.get('invoice_url', None)
@@ -1065,6 +1096,9 @@ def update_warranty(warranty_id):
             if 'other_document_url' in request.form:
                 sql_fields.append("other_document_url = %s")
                 sql_values.append(request.form.get('other_document_url'))
+            if 'additional_notification_email' in request.form:
+                sql_fields.append("additional_notification_email = %s")
+                sql_values.append(additional_notification_email)
 
             sql_fields.append("updated_at = NOW()") # Use SQL function, no parameter needed
             sql_values.append(warranty_id)
@@ -1490,7 +1524,7 @@ def get_all_warranties():
                     w.product_url, w.notes, w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, 
                     w.vendor, w.warranty_type, w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, w.product_photo_path, w.currency,
                     w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                    w.invoice_url, w.manual_url, w.other_document_url,
+                    w.invoice_url, w.manual_url, w.other_document_url, w.additional_notification_email,
                     u.username, u.email, u.first_name, u.last_name,
                     CASE
                         WHEN COUNT(c.id) = 0 THEN 'NO_CLAIMS'
@@ -1598,7 +1632,7 @@ def get_global_warranties():
                     w.product_url, w.notes, w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, 
                     w.vendor, w.warranty_type, w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, w.product_photo_path, w.currency,
                     w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number,
+                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number, w.additional_notification_email,
                     u.username, u.email, u.first_name, u.last_name,
                     CASE
                         WHEN EXISTS (
@@ -1711,7 +1745,7 @@ def get_global_warranties_archived():
                     w.product_url, w.notes, w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, 
                     w.vendor, w.warranty_type, w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, w.product_photo_path, w.currency,
                     w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number,
+                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number, w.additional_notification_email,
                     u.username, u.email, u.first_name, u.last_name,
                     CASE
                         WHEN EXISTS (
@@ -1908,7 +1942,7 @@ def get_warranty_debug(warranty_id):
                            w.product_url, w.notes, w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, 
                            w.vendor, w.warranty_type, w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, 
                            w.product_photo_path, w.currency, w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                           u.username, u.email, u.first_name, u.last_name
+                           w.additional_notification_email, u.username, u.email, u.first_name, u.last_name
                     FROM warranties w
                     LEFT JOIN users u ON w.user_id = u.id
                     WHERE w.id = %s
@@ -1919,7 +1953,7 @@ def get_warranty_debug(warranty_id):
                            w.product_url, w.notes, w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, 
                            w.vendor, w.warranty_type, w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, 
                            w.product_photo_path, w.currency, w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                           u.username, u.email, u.first_name, u.last_name
+                           w.additional_notification_email, u.username, u.email, u.first_name, u.last_name
                     FROM warranties w
                     LEFT JOIN users u ON w.user_id = u.id
                     WHERE w.id = %s AND w.user_id = %s
