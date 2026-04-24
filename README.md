@@ -72,24 +72,74 @@ The easiest way to organize product warranties, monitor expiration dates, and st
 
 ## Recent Maintenance Updates (2026-04-24)
 
-The following maintenance fixes were applied to improve stability, UX, and deployment safety:
+This release includes a large comparison pass and a full maintenance sweep focused on security, reliability, and day-to-day user experience.
 
-- Service worker cache cleanup:
-  - Removed stale cache entries pointing to deleted files (`debug-export.html`, `styles.css`)
-  - Added `verify-email-change.html` to pre-cache
-  - Bumped cache version for safe client refresh behavior
-- About page asset fix:
-  - Removed obsolete `styles.css` reference
-- Encoding and UI text fixes:
-  - Corrected broken close-button glyph rendering
-  - Fixed corrupted language labels in Settings using safe HTML entities
-  - Fixed malformed arrow symbol in Paperless helper text
-- Email change verification page:
-  - Added `frontend/verify-email-change.html`
-  - Implements token-based verification via `POST /api/auth/verify-email-change`
-  - Provides explicit success/error states and user navigation links
+### Quick Summary
 
-This update ensures cleaner service-worker installs, removes broken static references, and completes the frontend flow required by backend email-change verification.
+- Raw diff: `81 files changed` (`4010` insertions, `1701` deletions)
+- Functional diff (excluding `__pycache__`/`.pyc`): `52 files`
+  - `17` added
+  - `5` removed
+  - `30` modified
+
+### What Users Will Notice
+
+- Safer login sessions:
+  - JWT tokens are now tied to server sessions (`sid`) for better session invalidation
+  - Logout can target only the current session instead of invalidating everything
+- Better account and email handling:
+  - Emails are normalized to lowercase and enforced as case-insensitive unique (`Test@` = `test@`)
+  - Email change now uses verification tokens sent by email (instead of direct update)
+  - Clearer SSO/OIDC messaging when password login is attempted for SSO-managed accounts
+- Better behavior when users are removed:
+  - Warranties are preserved (detached) instead of being deleted
+  - Detached warranties appear as `Deleted User` in global views
+  - Expiration notifications can include orphan warranties (owner/admin fallback recipient)
+- More robust OIDC/SSO:
+  - Improved group/role extraction (including Keycloak patterns)
+  - Better reverse-proxy redirect handling
+  - Legacy setting key compatibility (`admin_oidc_group` -> `oidc_admin_group`)
+  - Safer token handoff in redirect (`#token=` fragment instead of query string)
+- Improved language/i18n reliability:
+  - More reliable language changes in Settings (cookie + localStorage persistence, i18n-ready handling)
+  - Better frontend translation fallback when a key is missing
+- Better PWA/cache behavior:
+  - Service worker updated to prefer network-first for navigation and translation files to reduce stale UI/language issues
+- More secure Paperless document opening:
+  - Auth token is no longer exposed in URL query parameters
+- UI quality fixes:
+  - Claims modal no longer attaches duplicate click handlers
+  - SSO login button is protected against double-click/double-redirect
+
+### Major Technical Additions
+
+- New SQL migrations:
+  - `backend/migrations/051_create_email_change_tokens_table.sql`
+  - `backend/migrations/052_enforce_case_insensitive_email_uniqueness.sql`
+- Modular frontend architecture groundwork added:
+  - `frontend/js/components/*`
+  - `frontend/js/services/*`
+  - `frontend/js/controllers/*`
+  - `frontend/js/store.js`
+  - `frontend/js/index.js`
+- Runtime/deployment hardening:
+  - `gunicorn preload_app` disabled to prevent duplicated scheduler/pool side effects
+  - Dockerfile made more tolerant for Debian `t64` package variants
+  - `docker-compose.yml` cleanup: deprecated top-level `version` removed
+
+### Cleanup and Maintenance
+
+- Removed debug/temporary files:
+  - `frontend/debug-export.html`
+  - `frontend/js/i18n-debug.js`
+  - `frontend/temp-toast-debug.js`
+  - `backend/fix_notification_columns.py`
+- Removed deprecated stylesheet file:
+  - `frontend/styles.css`
+- Follow-up fix pass completed:
+  - Removed stale static references from service worker and About page
+  - Added `frontend/verify-email-change.html` to complete the frontend flow for backend email verification
+  - Corrected malformed UI symbols/encoding artifacts in affected pages
 
 **Warracker is in active development.**
 The essential features are reliable and ready for everyday use. Development is ongoing, with regular updates and improvements.
