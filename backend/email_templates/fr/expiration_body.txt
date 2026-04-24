@@ -1,0 +1,11 @@
+{greeting}
+
+Les garanties suivantes expirent bientot :
+
+{warranty_lines_text}
+
+Connectez-vous a Warracker pour voir les details :
+{email_base_url}
+
+Gerez vos preferences de notification :
+{settings_url}

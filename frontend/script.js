@@ -249,6 +249,8 @@ const addAdditionalNotificationEmailBtn = document.getElementById('addAdditional
 const addEditAdditionalNotificationEmailBtn = document.getElementById('addEditAdditionalNotificationEmailBtn');
 const editOwnerGroup = document.getElementById('editOwnerGroup');
 const editOwnerSelect = document.getElementById('editOwnerSelect');
+const reminderDaysInput = document.getElementById('reminderDays');
+const editReminderDaysInput = document.getElementById('editReminderDays');
 
 // CSV Import Elements
 const importBtn = document.getElementById('importBtn');
@@ -3515,6 +3517,9 @@ async function openEditModal(warranty) {
         editModelNumberInput.value = warranty.model_number || '';
     }
     setAdditionalNotificationEmails(parseAdditionalNotificationEmails(warranty.additional_notification_email), true);
+    if (editReminderDaysInput) {
+        editReminderDaysInput.value = warranty.reminder_days || '';
+    }
     document.getElementById('editPurchaseDate').value = warranty.purchase_date.split('T')[0];
     // Populate new duration fields
     document.getElementById('editWarrantyDurationYears').value = warranty.warranty_duration_years || 0;
@@ -4219,6 +4224,9 @@ async function handleFormSubmit(event) { // Made async to properly await paperle
     
     // Create form data object
     const formData = new FormData(warrantyForm);
+    if (reminderDaysInput) {
+        formData.set('reminder_days', reminderDaysInput.value.trim());
+    }
     // Ensure model_number is included if present
     const modelNumberInput = document.getElementById('modelNumber');
     if (modelNumberInput && modelNumberInput.value.trim() !== '') {
@@ -6749,6 +6757,9 @@ function saveWarranty() {
         if (selectedOwnerId) {
             formData.append('user_id', selectedOwnerId);
         }
+    }
+    if (editReminderDaysInput) {
+        formData.append('reminder_days', editReminderDaysInput.value.trim());
     }
 
     formData.delete('additional_notification_email');

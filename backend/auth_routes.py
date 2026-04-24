@@ -16,11 +16,13 @@ try:
     from . import db_handler, notifications
     from .auth_utils import generate_token, token_required, is_valid_email, is_valid_password
     from .localization import SUPPORTED_LANGUAGES
+    from .email_template_utils import render_localized_email
 except ImportError:
     # Fallback for development environment
     import db_handler, notifications
     from auth_utils import generate_token, token_required, is_valid_email, is_valid_password
     from localization import SUPPORTED_LANGUAGES
+    from email_template_utils import render_localized_email
 
 # Import bcrypt from extensions since it's initialized with the app
 try:
@@ -30,6 +32,54 @@ except ImportError:
     from extensions import bcrypt
 
 auth_bp = Blueprint('auth_bp', __name__)
+
+DEFAULT_PASSWORD_RESET_SUBJECT = "Password Reset - Warracker"
+DEFAULT_PASSWORD_RESET_TEXT = (
+    "Hello,\n\n"
+    "You requested a password reset for your {app_name} account.\n\n"
+    "Reset your password:\n"
+    "{reset_link}\n\n"
+    "If you did not request this reset, you can ignore this email.\n"
+    "This link expires in 24 hours.\n\n"
+    "Thanks,\n"
+    "The {app_name} Team\n"
+)
+DEFAULT_PASSWORD_RESET_HTML = """\
+<html>
+  <body>
+    <p>Hello,</p>
+    <p>You requested a password reset for your {app_name} account.</p>
+    <p><a href="{reset_link}">Reset Password</a></p>
+    <p>If you did not request this reset, you can ignore this email.</p>
+    <p>This link expires in 24 hours.</p>
+    <p>Thanks,<br>The {app_name} Team</p>
+  </body>
+</html>
+"""
+
+DEFAULT_EMAIL_CHANGE_SUBJECT = "Confirm Your New Email - Warracker"
+DEFAULT_EMAIL_CHANGE_TEXT = (
+    "Hello,\n\n"
+    "You requested to change the email address for your {app_name} account.\n\n"
+    "Confirm your new email address:\n"
+    "{verify_link}\n\n"
+    "If you did not request this change, you can ignore this email.\n"
+    "This link expires in 1 hour.\n\n"
+    "Thanks,\n"
+    "The {app_name} Team\n"
+)
+DEFAULT_EMAIL_CHANGE_HTML = """\
+<html>
+  <body>
+    <p>Hello,</p>
+    <p>You requested to change the email address for your {app_name} account.</p>
+    <p><a href="{verify_link}">Confirm New Email</a></p>
+    <p>If you did not request this change, you can ignore this email.</p>
+    <p>This link expires in 1 hour.</p>
+    <p>Thanks,<br>The {app_name} Team</p>
+  </body>
+</html>
+"""
 
 def normalize_email(email):
     """Normalize emails for case-insensitive matching and storage."""
@@ -357,14 +407,23 @@ def request_password_reset():
         conn = db_handler.get_db_connection()
         with conn.cursor() as cur:
             # Check if user exists
-            cur.execute('SELECT id FROM users WHERE LOWER(email) = LOWER(%s)', (email,))
-            user = cur.fetchone()
-            
+            preferred_language = 'en'
+            try:
+                cur.execute('SELECT id, preferred_language FROM users WHERE LOWER(email) = LOWER(%s)', (email,))
+                user = cur.fetchone()
+            except Exception as lang_err:
+                current_app.logger.warning(f"preferred_language lookup failed in password reset request, using default: {lang_err}")
+                conn.rollback()
+                cur.execute('SELECT id FROM users WHERE LOWER(email) = LOWER(%s)', (email,))
+                user = cur.fetchone()
+             
             if not user:
                 # Don't reveal if email exists or not for security
                 return jsonify({'message': 'If your email is registered, you will receive a password reset link.'}), 200
-            
+             
             user_id = user[0]
+            if len(user) > 1 and user[1]:
+                preferred_language = user[1]
             
             # Generate reset token
             reset_token = str(uuid.uuid4())
@@ -406,7 +465,7 @@ def request_password_reset():
             # Send password reset email
             current_app.logger.info(f"Password reset requested for user {user_id}. Preparing to send email.")
             try:
-                send_password_reset_email(email, reset_link)
+                send_password_reset_email(email, reset_link, preferred_language=preferred_language)
                 current_app.logger.info(f"Password reset email initiated for {email}")
             except Exception as e:
                 current_app.logger.error(f"Failed to send password reset email to {email}: {e}")
@@ -757,7 +816,7 @@ def change_password():
             db_handler.release_db_connection(conn)
 
 # Helper functions for email functionality
-def send_password_reset_email(recipient_email, reset_link):
+def send_password_reset_email(recipient_email, reset_link, preferred_language='en'):
     """Sends the password reset email."""
     current_app.logger.info(f"Attempting to send password reset email to {recipient_email}")
     
@@ -769,32 +828,30 @@ def send_password_reset_email(recipient_email, reset_link):
         if os.environ.get('SMTP_PASSWORD_FILE'):
             smtp_password = open(os.environ.get('SMTP_PASSWORD_FILE'), 'r').read().strip()
         smtp_use_tls = os.environ.get('SMTP_USE_TLS', 'true').lower() == 'true'
-        smtp_use_ssl = os.environ.get('SMTP_USE_SSL', 'false').lower() == 'true'
-        sender_email = os.environ.get('SMTP_SENDER_EMAIL', 'noreply@warracker.com')
+        sender_email = os.environ.get('SMTP_FROM_ADDRESS') or os.environ.get('SMTP_SENDER_EMAIL', 'noreply@warracker.com')
         app_name = "Warracker"
-        
-        subject = f"Password Reset - {app_name}"
-        
-        app_base_url = os.environ.get('APP_BASE_URL', request.url_root.rstrip('/'))
-        
-        html_content = f"""
-        <html>
-            <body>
-                <p>Hello,</p>
-                <p>You have requested a password reset for your {app_name} account.</p>
-                <p>Please click the link below to reset your password:</p>
-                <p><a href="{reset_link}">Reset Password</a></p>
-                <p>If you did not request this password reset, please ignore this email.</p>
-                <p>This link will expire in 24 hours.</p>
-                <p>Thanks,<br>The {app_name} Team</p>
-            </body>
-        </html>
-        """
+
+        context = {
+            'app_name': app_name,
+            'reset_link': reset_link
+        }
+        subject, text_content, html_content = render_localized_email(
+            language=preferred_language,
+            context=context,
+            subject_template_name='password_reset_subject.txt',
+            text_template_name='password_reset_body.txt',
+            html_template_name='password_reset_body.html',
+            default_subject=DEFAULT_PASSWORD_RESET_SUBJECT,
+            default_text=DEFAULT_PASSWORD_RESET_TEXT,
+            default_html=DEFAULT_PASSWORD_RESET_HTML,
+            logger=current_app.logger
+        )
 
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = sender_email
         msg['To'] = recipient_email
+        msg.attach(MIMEText(text_content, 'plain'))
         msg.attach(MIMEText(html_content, 'html'))
 
         current_app.logger.info(f"Attempting to send password reset email to {recipient_email} via {smtp_host}:{smtp_port}")
@@ -1163,7 +1220,7 @@ def generate_secure_token(length=40):
         return uuid.uuid4().hex[:length]
     return (uuid.uuid4().hex + uuid.uuid4().hex)[:length]
 
-def send_email_change_verification_email(recipient_email, verify_link):
+def send_email_change_verification_email(recipient_email, verify_link, preferred_language='en'):
     """Send verification email for email change requests."""
     current_app.logger.info(f"Attempting to send email change verification email to {recipient_email}")
 
@@ -1175,28 +1232,30 @@ def send_email_change_verification_email(recipient_email, verify_link):
         if os.environ.get('SMTP_PASSWORD_FILE'):
             smtp_password = open(os.environ.get('SMTP_PASSWORD_FILE'), 'r').read().strip()
         smtp_use_tls = os.environ.get('SMTP_USE_TLS', 'true').lower() == 'true'
-        sender_email = os.environ.get('SMTP_SENDER_EMAIL', 'noreply@warracker.com')
+        sender_email = os.environ.get('SMTP_FROM_ADDRESS') or os.environ.get('SMTP_SENDER_EMAIL', 'noreply@warracker.com')
         app_name = "Warracker"
 
-        subject = f"Confirm Your New Email - {app_name}"
-        html_content = f"""
-        <html>
-            <body>
-                <p>Hello,</p>
-                <p>You requested to change your email address for your {app_name} account.</p>
-                <p>Please confirm your new address by clicking the link below:</p>
-                <p><a href="{verify_link}">Confirm New Email</a></p>
-                <p>If you did not request this change, you can ignore this email.</p>
-                <p>This link will expire in 1 hour.</p>
-                <p>Thanks,<br>The {app_name} Team</p>
-            </body>
-        </html>
-        """
+        context = {
+            'app_name': app_name,
+            'verify_link': verify_link
+        }
+        subject, text_content, html_content = render_localized_email(
+            language=preferred_language,
+            context=context,
+            subject_template_name='email_change_subject.txt',
+            text_template_name='email_change_body.txt',
+            html_template_name='email_change_body.html',
+            default_subject=DEFAULT_EMAIL_CHANGE_SUBJECT,
+            default_text=DEFAULT_EMAIL_CHANGE_TEXT,
+            default_html=DEFAULT_EMAIL_CHANGE_HTML,
+            logger=current_app.logger
+        )
 
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = sender_email
         msg['To'] = recipient_email
+        msg.attach(MIMEText(text_content, 'plain'))
         msg.attach(MIMEText(html_content, 'html'))
 
         if smtp_port == 465:
@@ -1238,13 +1297,21 @@ def request_email_change():
         cur = conn.cursor()
 
         # Fetch current user's password hash and current email
-        cur.execute("SELECT password_hash, email FROM users WHERE id = %s", (current_user_id,))
+        preferred_language = 'en'
+        try:
+            cur.execute("SELECT password_hash, email, preferred_language FROM users WHERE id = %s", (current_user_id,))
+        except Exception as lang_err:
+            current_app.logger.warning(f"preferred_language lookup failed in request_email_change, using default: {lang_err}")
+            conn.rollback()
+            cur.execute("SELECT password_hash, email FROM users WHERE id = %s", (current_user_id,))
         user_data = cur.fetchone()
 
         if not user_data:
             return jsonify({'message': 'User not found'}), 404
 
-        current_password_hash, current_email = user_data
+        current_password_hash, current_email = user_data[0], user_data[1]
+        if len(user_data) > 2 and user_data[2]:
+            preferred_language = user_data[2]
 
         if not current_password_hash:
             return jsonify({'message': 'Email changes are not available for SSO-managed accounts via password flow.'}), 400
@@ -1283,7 +1350,7 @@ def request_email_change():
                 current_app.logger.warning(f"Error fetching email_base_url for email change: {e}")
 
         verify_link = f"{email_base_url.rstrip('/')}/verify-email-change.html?token={verification_token}"
-        send_email_change_verification_email(new_email, verify_link)
+        send_email_change_verification_email(new_email, verify_link, preferred_language=preferred_language)
 
         return jsonify({'message': 'Verification email sent. Please confirm the new email address.'}), 200
 

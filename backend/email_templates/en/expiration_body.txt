@@ -1,0 +1,11 @@
+{greeting}
+
+The following warranties are expiring soon:
+
+{warranty_lines_text}
+
+Log in to Warracker to view details:
+{email_base_url}
+
+Manage your notification settings:
+{settings_url}

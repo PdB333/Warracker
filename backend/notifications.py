@@ -13,7 +13,6 @@ import atexit
 import smtplib
 import logging
 from html import escape
-from pathlib import Path
 from datetime import datetime, date, UTC, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -51,10 +50,14 @@ except ImportError:
         def get_site_setting(key, default=None):
             return default
 
+try:
+    from .email_template_utils import render_localized_email
+except ImportError:
+    from email_template_utils import render_localized_email
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
-EMAIL_TEMPLATE_DIR = Path(__file__).resolve().parent / 'email_templates'
 DEFAULT_EXPIRATION_EMAIL_SUBJECT = "Warracker: Upcoming Warranty Expirations"
 DEFAULT_EXPIRATION_EMAIL_TEXT_TEMPLATE = (
     "{greeting}\n\n"
@@ -87,6 +90,9 @@ DEFAULT_EXPIRATION_EMAIL_HTML_TEMPLATE = """\
   </body>
 </html>
 """
+HELLO_BY_LANGUAGE = {
+    'fr': 'Bonjour',
+}
 
 # Global variables for notification management
 notification_lock = threading.Lock()
@@ -131,16 +137,50 @@ def _extract_notification_emails(raw_value):
     return emails
 
 
-def _load_email_template(template_name, fallback_value):
-    """Load email template content from disk with safe fallback."""
-    template_path = EMAIL_TEMPLATE_DIR / template_name
+def _get_greeting(first_name, preferred_language=None):
+    language_code = str(preferred_language or 'en').strip().replace('-', '_').split('_', 1)[0].lower()
+    hello_word = HELLO_BY_LANGUAGE.get(language_code, 'Hello')
+    name = (first_name or '').strip()
+    if name:
+        return f"{hello_word} {name},"
+    return f"{hello_word},"
+
+
+def _parse_reminder_days(raw_value):
+    if not raw_value:
+        return []
+    parsed = []
+    for token in str(raw_value).split(','):
+        item = token.strip()
+        if not item:
+            continue
+        if not item.isdigit():
+            logger.warning(f"Ignoring invalid reminder day token: '{item}'")
+            continue
+        day = int(item)
+        if day < 1 or day > 3650:
+            logger.warning(f"Ignoring out-of-range reminder day value: {day}")
+            continue
+        parsed.append(day)
+    return sorted(set(parsed))
+
+
+def _is_warranty_due_for_notification(expiration_date, today, user_expiring_soon_days, reminder_days_raw):
+    if not expiration_date:
+        return False
+    days_until_expiration = (expiration_date - today).days
+    if days_until_expiration <= 0:
+        return False
+
+    custom_days = _parse_reminder_days(reminder_days_raw)
+    if custom_days:
+        return days_until_expiration in custom_days
+
     try:
-        if template_path.exists():
-            return template_path.read_text(encoding='utf-8')
-        logger.warning(f"Email template not found: {template_path}. Using fallback.")
-    except Exception as e:
-        logger.warning(f"Failed to load email template {template_path}: {e}. Using fallback.")
-    return fallback_value
+        expiring_limit = int(user_expiring_soon_days) if user_expiring_soon_days is not None else 30
+    except (TypeError, ValueError):
+        expiring_limit = 30
+    return days_until_expiration <= expiring_limit
 
 def _get_orphan_warranty_recipient(conn):
     """
@@ -152,7 +192,7 @@ def _get_orphan_warranty_recipient(conn):
         cur = conn.cursor()
         try:
             cur.execute("""
-                SELECT id, email, first_name
+                SELECT id, email, first_name, preferred_language
                 FROM users
                 WHERE is_owner = TRUE AND is_active = TRUE
                 ORDER BY id
@@ -160,7 +200,7 @@ def _get_orphan_warranty_recipient(conn):
             """)
             row = cur.fetchone()
             if row:
-                return {'user_id': row[0], 'email': row[1], 'first_name': row[2] or 'Owner'}
+                return {'user_id': row[0], 'email': row[1], 'first_name': row[2] or 'Owner', 'preferred_language': row[3] or 'en'}
         except Exception as owner_err:
             # Handle deployments where is_owner may not exist yet
             logger.warning(f"Owner lookup failed for orphan notifications, falling back to admin: {owner_err}")
@@ -170,7 +210,7 @@ def _get_orphan_warranty_recipient(conn):
 
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, email, first_name
+            SELECT id, email, first_name, preferred_language
             FROM users
             WHERE is_admin = TRUE AND is_active = TRUE
             ORDER BY id
@@ -178,7 +218,7 @@ def _get_orphan_warranty_recipient(conn):
         """)
         row = cur.fetchone()
         if row:
-            return {'user_id': row[0], 'email': row[1], 'first_name': row[2] or 'Admin'}
+            return {'user_id': row[0], 'email': row[1], 'first_name': row[2] or 'Admin', 'preferred_language': row[3] or 'en'}
     except Exception as e:
         logger.error(f"Error selecting orphan warranty recipient: {e}")
         try:
@@ -231,9 +271,11 @@ def get_expiring_warranties(get_db_connection, release_db_connection):
                     u.id, -- Select user_id
                     u.email,
                     u.first_name,
+                    u.preferred_language,
                     w.product_name,
                     w.expiration_date,
                     w.additional_notification_email,
+                    w.reminder_days,
                     COALESCE(up.expiring_soon_days, 30) AS expiring_soon_days
                 FROM
                     warranties w
@@ -244,23 +286,27 @@ def get_expiring_warranties(get_db_connection, release_db_connection):
                 WHERE
                     w.is_lifetime = FALSE
                     AND w.expiration_date > %s
-                    AND w.expiration_date <= (%s::date + (COALESCE(up.expiring_soon_days, 30) || ' days')::interval)::date
+                    AND w.expiration_date <= (%s::date + INTERVAL '3650 days')
                     AND w.archived_at IS NULL
                     AND u.is_active = TRUE;
             """, (today, today))
 
             expiring_warranties = []
             for row in cur.fetchall():
-                warranty_id, user_id, email, first_name, product_name, expiration_date, additional_notification_email, expiring_soon_days = row
+                warranty_id, user_id, email, first_name, preferred_language, product_name, expiration_date, additional_notification_email, reminder_days, expiring_soon_days = row
+                if not _is_warranty_due_for_notification(expiration_date, today, expiring_soon_days, reminder_days):
+                    continue
                 expiration_date_str = expiration_date.strftime('%Y-%m-%d')
                 expiring_warranties.append({
                     'warranty_id': warranty_id,
                     'user_id': user_id,
                     'email': email,
                     'first_name': first_name or 'User',  # Default if first_name is NULL
+                    'preferred_language': preferred_language or 'en',
                     'product_name': product_name,
                     'expiration_date': expiration_date_str,
                     'additional_notification_email': additional_notification_email,
+                    'reminder_days': reminder_days,
                 })
 
             orphan_recipient = _get_orphan_warranty_recipient(conn)
@@ -281,29 +327,34 @@ def get_expiring_warranties(get_db_connection, release_db_connection):
                             w.id,
                             w.product_name,
                             w.expiration_date,
-                            w.additional_notification_email
+                            w.additional_notification_email,
+                            w.reminder_days
                         FROM
                             warranties w
                         WHERE
                             w.user_id IS NULL
                             AND w.is_lifetime = FALSE
                             AND w.expiration_date > %s
-                            AND w.expiration_date <= (%s::date + (%s || ' days')::interval)::date
+                            AND w.expiration_date <= (%s::date + INTERVAL '3650 days')
                             AND w.archived_at IS NULL
                         ORDER BY w.expiration_date, w.product_name
-                    """, (today, today, orphan_days))
+                    """, (today, today))
 
                     orphan_rows = orphan_cur.fetchall()
-                    for warranty_id, product_name, expiration_date, additional_notification_email in orphan_rows:
+                    for warranty_id, product_name, expiration_date, additional_notification_email, reminder_days in orphan_rows:
+                        if not _is_warranty_due_for_notification(expiration_date, today, orphan_days, reminder_days):
+                            continue
                         expiration_date_str = expiration_date.strftime('%Y-%m-%d')
                         expiring_warranties.append({
                             'warranty_id': warranty_id,
                             'user_id': orphan_recipient['user_id'],
                             'email': orphan_recipient['email'],
                             'first_name': orphan_recipient['first_name'],
+                            'preferred_language': orphan_recipient.get('preferred_language', 'en'),
                             'product_name': product_name,
                             'expiration_date': expiration_date_str,
                             'additional_notification_email': additional_notification_email,
+                            'reminder_days': reminder_days,
                             'is_orphaned': True
                         })
 
@@ -330,8 +381,8 @@ def format_expiration_email(user, warranties, get_db_connection, release_db_conn
     Format an email notification for expiring warranties.
     Returns a MIMEMultipart email object with both text and HTML versions.
     """
-    subject_template = _load_email_template('expiration_subject.txt', DEFAULT_EXPIRATION_EMAIL_SUBJECT)
-    
+    preferred_language = user.get('preferred_language', 'en')
+
     # Get email base URL from settings with correct precedence
     # Priority: Environment Variable > Database Setting > Hardcoded Default
     email_base_url = os.environ.get('APP_BASE_URL')
@@ -358,7 +409,7 @@ def format_expiration_email(user, warranties, get_db_connection, release_db_conn
     email_base_url = email_base_url.rstrip('/')
     
     recipient_first_name = (user.get('first_name') or '').strip()
-    greeting_text = f"Hello {recipient_first_name}," if recipient_first_name else "Hello,"
+    greeting_text = _get_greeting(recipient_first_name, preferred_language)
 
     text_rows = []
     html_rows = []
@@ -378,24 +429,24 @@ def format_expiration_email(user, warranties, get_db_connection, release_db_conn
 
     context = {
         'greeting': greeting_text,
+        'first_name': recipient_first_name,
         'warranty_lines_text': '\n'.join(text_rows),
         'warranty_rows_html': '\n'.join(html_rows),
         'email_base_url': email_base_url,
         'settings_url': f"{email_base_url}/settings-new.html",
     }
 
-    text_template = _load_email_template('expiration_body.txt', DEFAULT_EXPIRATION_EMAIL_TEXT_TEMPLATE)
-    html_template = _load_email_template('expiration_body.html', DEFAULT_EXPIRATION_EMAIL_HTML_TEMPLATE)
-
-    try:
-        subject = subject_template.format(**context).strip()
-        text_body = text_template.format(**context)
-        html_body = html_template.format(**context)
-    except KeyError as e:
-        logger.error(f"Email template variable missing: {e}. Falling back to built-in templates.")
-        subject = DEFAULT_EXPIRATION_EMAIL_SUBJECT
-        text_body = DEFAULT_EXPIRATION_EMAIL_TEXT_TEMPLATE.format(**context)
-        html_body = DEFAULT_EXPIRATION_EMAIL_HTML_TEMPLATE.format(**context)
+    subject, text_body, html_body = render_localized_email(
+        language=preferred_language,
+        context=context,
+        subject_template_name='expiration_subject.txt',
+        text_template_name='expiration_body.txt',
+        html_template_name='expiration_body.html',
+        default_subject=DEFAULT_EXPIRATION_EMAIL_SUBJECT,
+        default_text=DEFAULT_EXPIRATION_EMAIL_TEXT_TEMPLATE,
+        default_html=DEFAULT_EXPIRATION_EMAIL_HTML_TEMPLATE,
+        logger=logger
+    )
 
     # Create a MIMEMultipart object for both text and HTML
     msg = MIMEMultipart('alternative')
@@ -464,11 +515,14 @@ def process_email_notifications(all_warranties, eligible_user_ids, is_manual, ge
                 'email': normalized_email,
                 'user_id': warranty.get('user_id'),
                 'first_name': recipient_first_name,
+                'preferred_language': warranty.get('preferred_language') or 'en',
                 'warranties': [],
                 'warranty_ids': set()
             }
         elif not users_warranties[normalized_email].get('first_name') and recipient_first_name:
             users_warranties[normalized_email]['first_name'] = recipient_first_name
+        elif not users_warranties[normalized_email].get('preferred_language') and warranty.get('preferred_language'):
+            users_warranties[normalized_email]['preferred_language'] = warranty.get('preferred_language')
 
         warranty_id = warranty.get('warranty_id')
         if warranty_id is not None:
@@ -573,13 +627,18 @@ def process_email_notifications(all_warranties, eligible_user_ids, is_manual, ge
                     continue
             
             msg = format_expiration_email(
-                {'first_name': user_data['first_name'], 'email': recipient_email},
+                {
+                    'first_name': user_data['first_name'],
+                    'email': recipient_email,
+                    'preferred_language': user_data.get('preferred_language', 'en')
+                },
                 user_data['warranties'],
                 get_db_connection,
                 release_db_connection
             )
             try:
-                server.sendmail(smtp_username, recipient_email, msg.as_string())
+                sender_email = msg.get('From') or smtp_username
+                server.sendmail(sender_email, recipient_email, msg.as_string())
                 last_notification_sent[recipient_email] = timestamp
                 emails_sent += 1
                 logger.info(f"Email sent to {recipient_email} for {len(user_data['warranties'])} warranties")

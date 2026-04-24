@@ -44,10 +44,8 @@ This fork includes all upstream functionality plus the following important addit
 
 - additional notification recipients on warranties
 - support for multiple additional emails per warranty (comma-separated storage)
-- separate email templates on disk (editable without Python code changes):
-  - `backend/email_templates/expiration_subject.txt`
-  - `backend/email_templates/expiration_body.txt`
-  - `backend/email_templates/expiration_body.html`
+- email templates externalized on disk with language folders (editable without Python code changes)
+- per-warranty personalized reminder days (`reminder_days`, example: `30,7,1`)
 
 ### UI / i18n / UX
 
@@ -220,7 +218,41 @@ Use `Docker/.env.example` as baseline. The list below includes variables used by
 - Standard email notifications go to warranty owner email.
 - Additional notification emails can be attached to a warranty.
 - Multiple additional recipients are supported in this fork.
+- Additional recipients receive the same warranty notification list, but greeting is based on the recipient profile (no owner-name leakage).
+- Per-warranty `reminder_days` overrides user-level `expiring_soon_days` for that warranty.
 - If owner account is removed and warranty is detached, notification fallback can target owner/admin recipient logic.
+
+## Email Template Structure (i18n)
+
+Templates are stored in:
+
+- `backend/email_templates/<lang>/expiration_subject.txt`
+- `backend/email_templates/<lang>/expiration_body.txt`
+- `backend/email_templates/<lang>/expiration_body.html`
+- `backend/email_templates/<lang>/password_reset_subject.txt`
+- `backend/email_templates/<lang>/password_reset_body.txt`
+- `backend/email_templates/<lang>/password_reset_body.html`
+- `backend/email_templates/<lang>/email_change_subject.txt`
+- `backend/email_templates/<lang>/email_change_body.txt`
+- `backend/email_templates/<lang>/email_change_body.html`
+
+Current language folders included in this fork:
+
+- `backend/email_templates/en/`
+- `backend/email_templates/fr/`
+
+Language resolution behavior:
+
+1. Exact locale match (example: `fr_CA`)
+2. Base language fallback (example: `fr`)
+3. English fallback (`en`)
+4. Legacy flat file fallback in `backend/email_templates/` if present
+
+Main template variables:
+
+- Expiration templates: `{greeting}`, `{warranty_lines_text}`, `{warranty_rows_html}`, `{email_base_url}`, `{settings_url}`
+- Password reset templates: `{app_name}`, `{reset_link}`
+- Email change templates: `{app_name}`, `{verify_link}`
 
 ## Migrations
 
@@ -231,6 +263,8 @@ Notable recent migrations:
 - `052_enforce_case_insensitive_email_uniqueness.sql`
 - `053_add_additional_notification_email_to_warranties.sql`
 - `054_expand_additional_notification_email_to_text.sql`
+- `055_set_default_date_format_to_dmy.sql`
+- `056_add_reminder_days_to_warranties.sql`
 
 ## Contributing
 

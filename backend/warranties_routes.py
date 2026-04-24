@@ -35,6 +35,8 @@ logger = logging.getLogger(__name__)
 warranties_bp = Blueprint('warranties_bp', __name__)
 NOTIFICATION_EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MAX_ADDITIONAL_NOTIFICATION_EMAILS = 10
+MAX_REMINDER_DAYS_VALUES = 20
+MAX_REMINDER_DAY = 3650
 
 
 
@@ -94,6 +96,40 @@ def parse_additional_notification_emails_from_form(form_data):
 
     return parse_optional_notification_emails(values)
 
+
+def parse_reminder_days(raw_value):
+    """Normalize and validate per-warranty reminder day list."""
+    if raw_value is None:
+        return None
+
+    value = str(raw_value).strip()
+    if not value:
+        return None
+
+    parsed_days = []
+    seen = set()
+    for token in value.split(','):
+        item = token.strip()
+        if not item:
+            continue
+        if not item.isdigit():
+            raise ValueError("Reminder days must be comma-separated positive numbers")
+        day_value = int(item)
+        if day_value < 1 or day_value > MAX_REMINDER_DAY:
+            raise ValueError(f"Reminder days must be between 1 and {MAX_REMINDER_DAY}")
+        if day_value in seen:
+            continue
+        seen.add(day_value)
+        parsed_days.append(day_value)
+
+    if len(parsed_days) > MAX_REMINDER_DAYS_VALUES:
+        raise ValueError(f"Too many reminder day values (max {MAX_REMINDER_DAYS_VALUES})")
+
+    if not parsed_days:
+        return None
+
+    return ",".join(str(day) for day in sorted(parsed_days, reverse=True))
+
 @warranties_bp.route('/warranties', methods=['GET'])
 @token_required
 def get_warranties():
@@ -113,7 +149,7 @@ def get_warranties():
                     w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, w.vendor, w.warranty_type,
                     w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, w.product_photo_path, w.currency,
                     w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number, w.additional_notification_email,
+                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number, w.additional_notification_email, w.reminder_days,
                     CASE
                         WHEN COUNT(c.id) = 0 THEN 'NO_CLAIMS'
                         WHEN BOOL_OR(c.status IN ('Submitted', 'In Progress')) THEN 'OPEN'
@@ -182,7 +218,7 @@ def get_archived_warranties():
                     w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, w.vendor, w.warranty_type,
                     w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, w.product_photo_path, w.currency,
                     w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number, w.additional_notification_email,
+                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number, w.additional_notification_email, w.reminder_days,
                     CASE
                         WHEN COUNT(c.id) = 0 THEN 'NO_CLAIMS'
                         WHEN BOOL_OR(c.status IN ('Submitted', 'In Progress')) THEN 'OPEN'
@@ -300,6 +336,10 @@ def add_warranty():
         model_number = request.form.get('model_number', None)
         try:
             additional_notification_email = parse_additional_notification_emails_from_form(request.form)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        try:
+            reminder_days = parse_reminder_days(request.form.get('reminder_days'))
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
         
@@ -493,16 +533,16 @@ def add_warranty():
                     invoice_path, manual_path, other_document_path, product_url, purchase_price, user_id, is_lifetime, notes, vendor, warranty_type,
                     warranty_duration_years, warranty_duration_months, warranty_duration_days, product_photo_path, currency,
                     paperless_invoice_id, paperless_manual_id, paperless_photo_id, paperless_other_id,
-                    invoice_url, manual_url, other_document_url, model_number, additional_notification_email
+                    invoice_url, manual_url, other_document_url, model_number, additional_notification_email, reminder_days
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
                 product_name, purchase_date, expiration_date,
                 db_invoice_path, db_manual_path, db_other_document_path, product_url, purchase_price, user_id, is_lifetime, notes, vendor, warranty_type,
                 warranty_duration_years, warranty_duration_months, warranty_duration_days, db_product_photo_path, currency,
                 paperless_invoice_id, paperless_manual_id, paperless_photo_id, paperless_other_id,
-                invoice_url, manual_url, other_document_url, model_number, additional_notification_email
+                invoice_url, manual_url, other_document_url, model_number, additional_notification_email, reminder_days
             ))
             warranty_id = cur.fetchone()[0]
             
@@ -769,6 +809,12 @@ def update_warranty(warranty_id):
             if 'additional_notification_email' in request.form or 'additional_notification_email[]' in request.form:
                 try:
                     additional_notification_email = parse_additional_notification_emails_from_form(request.form)
+                except ValueError as exc:
+                    return jsonify({"error": str(exc)}), 400
+            reminder_days = None
+            if 'reminder_days' in request.form:
+                try:
+                    reminder_days = parse_reminder_days(request.form.get('reminder_days'))
                 except ValueError as exc:
                     return jsonify({"error": str(exc)}), 400
             updated_owner_user_id = None
@@ -1138,6 +1184,9 @@ def update_warranty(warranty_id):
             if 'additional_notification_email' in request.form or 'additional_notification_email[]' in request.form:
                 sql_fields.append("additional_notification_email = %s")
                 sql_values.append(additional_notification_email)
+            if 'reminder_days' in request.form:
+                sql_fields.append("reminder_days = %s")
+                sql_values.append(reminder_days)
             if updated_owner_user_id is not None:
                 sql_fields.append("user_id = %s")
                 sql_values.append(updated_owner_user_id)
@@ -1566,7 +1615,7 @@ def get_all_warranties():
                     w.product_url, w.notes, w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, 
                     w.vendor, w.warranty_type, w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, w.product_photo_path, w.currency,
                     w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                    w.invoice_url, w.manual_url, w.other_document_url, w.additional_notification_email,
+                    w.invoice_url, w.manual_url, w.other_document_url, w.additional_notification_email, w.reminder_days,
                     u.username, u.email, u.first_name, u.last_name,
                     CASE
                         WHEN COUNT(c.id) = 0 THEN 'NO_CLAIMS'
@@ -1674,7 +1723,7 @@ def get_global_warranties():
                     w.product_url, w.notes, w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, 
                     w.vendor, w.warranty_type, w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, w.product_photo_path, w.currency,
                     w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number, w.additional_notification_email,
+                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number, w.additional_notification_email, w.reminder_days,
                     u.username, u.email, u.first_name, u.last_name,
                     CASE
                         WHEN EXISTS (
@@ -1787,7 +1836,7 @@ def get_global_warranties_archived():
                     w.product_url, w.notes, w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, 
                     w.vendor, w.warranty_type, w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, w.product_photo_path, w.currency,
                     w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number, w.additional_notification_email,
+                    w.invoice_url, w.manual_url, w.other_document_url, w.model_number, w.additional_notification_email, w.reminder_days,
                     u.username, u.email, u.first_name, u.last_name,
                     CASE
                         WHEN EXISTS (
@@ -1984,7 +2033,7 @@ def get_warranty_debug(warranty_id):
                            w.product_url, w.notes, w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, 
                            w.vendor, w.warranty_type, w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, 
                            w.product_photo_path, w.currency, w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                           w.additional_notification_email, u.username, u.email, u.first_name, u.last_name
+                           w.additional_notification_email, w.reminder_days, u.username, u.email, u.first_name, u.last_name
                     FROM warranties w
                     LEFT JOIN users u ON w.user_id = u.id
                     WHERE w.id = %s
@@ -1995,7 +2044,7 @@ def get_warranty_debug(warranty_id):
                            w.product_url, w.notes, w.purchase_price, w.user_id, w.created_at, w.updated_at, w.is_lifetime, 
                            w.vendor, w.warranty_type, w.warranty_duration_years, w.warranty_duration_months, w.warranty_duration_days, 
                            w.product_photo_path, w.currency, w.paperless_invoice_id, w.paperless_manual_id, w.paperless_photo_id, w.paperless_other_id,
-                           w.additional_notification_email, u.username, u.email, u.first_name, u.last_name
+                           w.additional_notification_email, w.reminder_days, u.username, u.email, u.first_name, u.last_name
                     FROM warranties w
                     LEFT JOIN users u ON w.user_id = u.id
                     WHERE w.id = %s AND w.user_id = %s
