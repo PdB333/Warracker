@@ -70,6 +70,27 @@ The easiest way to organize product warranties, monitor expiration dates, and st
 
 ## Project Status
 
+## Recent Maintenance Updates (2026-04-24)
+
+The following maintenance fixes were applied to improve stability, UX, and deployment safety:
+
+- Service worker cache cleanup:
+  - Removed stale cache entries pointing to deleted files (`debug-export.html`, `styles.css`)
+  - Added `verify-email-change.html` to pre-cache
+  - Bumped cache version for safe client refresh behavior
+- About page asset fix:
+  - Removed obsolete `styles.css` reference
+- Encoding and UI text fixes:
+  - Corrected broken close-button glyph rendering
+  - Fixed corrupted language labels in Settings using safe HTML entities
+  - Fixed malformed arrow symbol in Paperless helper text
+- Email change verification page:
+  - Added `frontend/verify-email-change.html`
+  - Implements token-based verification via `POST /api/auth/verify-email-change`
+  - Provides explicit success/error states and user navigation links
+
+This update ensures cleaner service-worker installs, removes broken static references, and completes the frontend flow required by backend email-change verification.
+
 **Warracker is in active development.**
 The essential features are reliable and ready for everyday use. Development is ongoing, with regular updates and improvements.
 
