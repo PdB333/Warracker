@@ -1,474 +1,268 @@
+# Warracker (Fork)
 
-<div align="center">
-    
-<img src="https://github.com/user-attachments/assets/2132a842-4233-4d37-8fde-b2d23353ed76" width="100"/>
+Warranty tracking app for teams and individuals.
 
-<h1 <strong>Warracker</strong></h1>
-<p align="center">
-    <b>Open-source warranty tracker for individuals and teams.</b> <br/>
-The easiest way to organize product warranties, monitor expiration dates, and store receipts or related documents.
-</b>
-</p>
-</div>
+This repository is a fork of the original project:
+- Upstream: https://github.com/sassanix/Warracker
+- This fork: https://github.com/PdB333/Warracker
 
+## Fork Notice
 
-<div align="center">
-    
-![GitHub issues](https://img.shields.io/github/issues/sassanix/Warracker)
-![GitHub license](https://img.shields.io/github/license/sassanix/Warracker)
-![GitHub last commit](https://img.shields.io/github/last-commit/sassanix/Warracker)
-![GitHub release](https://img.shields.io/github/v/release/sassanix/Warracker)
-![GitHub contributors](https://img.shields.io/github/contributors/sassanix/Warracker)
-[![Discord](https://img.shields.io/badge/discord-chat-green?logo=discord)](https://discord.gg/PGxVS3U2Nw)
+This fork keeps upstream Warracker as the base and adds production-focused fixes and custom behavior used in real deployments.
 
-<p align="center">
-  <img src="images/demo2.gif" alt="Warracker Demo" width="650">
-</p>
+Please credit the upstream project and keep AGPL-3.0 license terms when reusing or redistributing.
 
+## What This App Does
 
-#
+Warracker helps you:
+- track warranties and expiration dates
+- store product-related documents
+- manage users and roles
+- send expiration notifications (email and/or Apprise)
+- use OIDC SSO (Keycloak, Google, etc.)
 
+## Fork-Specific Additions
 
-    
-</div>
-⭐ If you find Warracker helpful, we’d truly appreciate a star on GitHub! Your support motivates us to keep improving and building great new features.
+This fork includes all upstream functionality plus the following important additions.
 
-#
+### Reliability and Account Behavior
 
-## 🌟Overview
+- warranties are preserved when a user is deleted (detached/orphan mode)
+- orphan warranties are visible in global/admin context with `[Deleted User]` marker
+- orphan warranty notification fallback goes to active owner/admin recipient
+- case-insensitive email uniqueness hardening
+- safer session behavior with server-side session id checks
 
-**Warracker** is a web-based application that simplifies the management of product warranties. It allows users to organize warranty information, monitor expiration dates, and securely store related documents.
+### OIDC and Admin Mapping
 
+- improved OIDC group/role extraction logic for providers like Keycloak
+- support for `OIDC_ADMIN_GROUP` mapping
+- compatibility with legacy setting key `admin_oidc_group`
+- safer callback token handoff (`#token=` fragment flow)
 
-## 🔑 Key Features
+### Notification Improvements
 
-| **Feature**                      | **Description**                                                                                          |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| 🗃️ **Centralized Management**   | Track all your product warranties in one place                                                           |
-| 🧾 **Detailed Records**          | Store purchase dates, durations, notes, and product photos with thumbnail previews                       |
-| 📄 **Document Storage**          | Upload receipts, invoices, and manuals securely                                                          |
-| 📝 **Warranty Claims**           | Manage warranty claims end-to-end with statuses, dates, resolutions, and full lifecycle visibility       |
-| 🔔 **Proactive Alerts**          | Get alerts for upcoming expirations via email or 100+ push services (Discord, Slack, etc.) using Apprise |
-| 🔍 **Quick Search and Filter**   | Search by product name, serial number, vendor, tags, and more with real-time filtering                   |
-| #️⃣ **Multiple Serial Numbers**  | Add and manage multiple serial numbers per product                                                       |
-| 🌍 **Global Warranty View**      | Authenticated users can view global warranty data with role-based permissions                            |
-| 👥 **Multi-User Support**        | Manage multiple accounts with admin controls and global access toggles                                   |
-| 📤 **Data Export/Import**        | Import/export warranty data via CSV                                                                      |
-| ⚙️ **Customizable Settings**     | Configure currency, date formats, notification timing, and branding                                      |
-| 🌐 **Internationalization Support** | Support for multiple currencies and date formats tailored to regional preferences, enabling a seamless global user experience |
-| 🏷️ **Tagging**                  | Organize warranties using custom tags                                                                    |
-| 📦 **Archiving**                 | Archive expired or unused warranties for better organization, while keeping records accessible when needed |
-| 🔐 **Password Reset**            | Token-based, secure account recovery system                                                              |
-| 🔑 **OIDC SSO**                  | Single sign-on with providers like Google, GitHub, and Keycloak                                          |
-| 📊 **Status Dashboard**          | Visual analytics and stats with charts, tables, and global/user views                                    |
-| 📱 **Responsive UI**             | Mobile-friendly interface with admin tools and improved UX                                               |
-| 📦 **Paperless-ngx Integration** | Store/manage documents directly in Paperless-ngx with file-level control                                 |
-| 📖 **Localization Support**      | [Full multilingual UI with 20 languages](https://github.com/sassanix/Warracker?tab=readme-ov-file#-localization-support), RTL support, instant language switching, and native name display |
+- additional notification recipients on warranties
+- support for multiple additional emails per warranty (comma-separated storage)
+- separate email templates on disk (editable without Python code changes):
+  - `backend/email_templates/expiration_subject.txt`
+  - `backend/email_templates/expiration_body.txt`
+  - `backend/email_templates/expiration_body.html`
 
+### UI / i18n / UX
 
----
+- language switching robustness improvements
+- translation fallback behavior hardened
+- service worker caching behavior improved for language/update consistency
+- missing translation keys filled for new notification-email UI
 
-## Project Status
+### HTTPS in Container
 
-## Recent Maintenance Updates (2026-04-24)
+- optional TLS termination directly inside the app container via env flags
+- configurable cert/key paths
+- works with self-signed or internal CA certs when correctly mounted
 
-This release includes a large comparison pass and a full maintenance sweep focused on security, reliability, and day-to-day user experience.
+## Tech Stack
 
-### Quick Summary
+- Frontend: HTML, CSS, JavaScript
+- Backend: Python (Flask)
+- Database: PostgreSQL
+- Web server: Nginx
+- Process: Gunicorn + Supervisor
+- Container: Docker Compose
 
-- Raw diff: `81 files changed` (`4010` insertions, `1701` deletions)
-- Functional diff (excluding `__pycache__`/`.pyc`): `52 files`
-  - `17` added
-  - `5` removed
-  - `30` modified
-
-### What Users Will Notice
-
-- Safer login sessions:
-  - JWT tokens are now tied to server sessions (`sid`) for better session invalidation
-  - Logout can target only the current session instead of invalidating everything
-- Better account and email handling:
-  - Emails are normalized to lowercase and enforced as case-insensitive unique (`Test@` = `test@`)
-  - Email change now uses verification tokens sent by email (instead of direct update)
-  - Clearer SSO/OIDC messaging when password login is attempted for SSO-managed accounts
-- Better behavior when users are removed:
-  - Warranties are preserved (detached) instead of being deleted
-  - Detached warranties appear as `Deleted User` in global views
-  - Expiration notifications can include orphan warranties (owner/admin fallback recipient)
-- More robust OIDC/SSO:
-  - Improved group/role extraction (including Keycloak patterns)
-  - Better reverse-proxy redirect handling
-  - Legacy setting key compatibility (`admin_oidc_group` -> `oidc_admin_group`)
-  - Safer token handoff in redirect (`#token=` fragment instead of query string)
-- Improved language/i18n reliability:
-  - More reliable language changes in Settings (cookie + localStorage persistence, i18n-ready handling)
-  - Better frontend translation fallback when a key is missing
-- Better PWA/cache behavior:
-  - Service worker updated to prefer network-first for navigation and translation files to reduce stale UI/language issues
-- More secure Paperless document opening:
-  - Auth token is no longer exposed in URL query parameters
-- UI quality fixes:
-  - Claims modal no longer attaches duplicate click handlers
-  - SSO login button is protected against double-click/double-redirect
-
-### Major Technical Additions
-
-- New SQL migrations:
-  - `backend/migrations/051_create_email_change_tokens_table.sql`
-  - `backend/migrations/052_enforce_case_insensitive_email_uniqueness.sql`
-- Modular frontend architecture groundwork added:
-  - `frontend/js/components/*`
-  - `frontend/js/services/*`
-  - `frontend/js/controllers/*`
-  - `frontend/js/store.js`
-  - `frontend/js/index.js`
-- Runtime/deployment hardening:
-  - `gunicorn preload_app` disabled to prevent duplicated scheduler/pool side effects
-  - Dockerfile made more tolerant for Debian `t64` package variants
-  - `docker-compose.yml` cleanup: deprecated top-level `version` removed
-
-### Cleanup and Maintenance
-
-- Removed debug/temporary files:
-  - `frontend/debug-export.html`
-  - `frontend/js/i18n-debug.js`
-  - `frontend/temp-toast-debug.js`
-  - `backend/fix_notification_columns.py`
-- Removed deprecated stylesheet file:
-  - `frontend/styles.css`
-- Follow-up fix pass completed:
-  - Removed stale static references from service worker and About page
-  - Added `frontend/verify-email-change.html` to complete the frontend flow for backend email verification
-  - Corrected malformed UI symbols/encoding artifacts in affected pages
-
-**Warracker is in active development.**
-The essential features are reliable and ready for everyday use. Development is ongoing, with regular updates and improvements.
-
-* ✅ Stable core for tracking, notification , and managing warranty documents, files
-* ✅ Full support for self-hosted deployments
-* ⚒️ Advanced enhancements are still being worked on
-* ✍️ Your feedback and bug reports help shape the future of the app
-
-## 📸Screenshots
-
-**Home Page**
-
-<img width="1214" height="928" alt="image" src="https://github.com/user-attachments/assets/0c13e416-42ea-4378-ae50-7addee435e00" />
-
-<img width="1208" height="927" alt="image" src="https://github.com/user-attachments/assets/4c5fdd5d-ff43-427d-82a5-45121dd21373" />
-
-
-**Status Dashboard**  
-
-<img width="1167" height="1140" alt="image" src="https://github.com/user-attachments/assets/fca09073-7c34-4165-ad5c-86a03618ec87" />
-
-
-## 🛠️Technology Stack
-
-*   **Frontend**: HTML, CSS, JavaScript
-*   **Backend**: Python with Flask
-*   **Database**: PostgreSQL
-*   **Containerization**: Docker and Docker Compose
-*   **Web Server**: Nginx
-
-## 🗺️Roadmap
-
-* ✅ User Authentication
-* ✅ Settings Page
-* ✅ Status Page
-* ✅ Customizable Reminders
-* ✅ Email Notifications
-* ✅ Warranty Categories via Tags
-* ✅ CSV Import/Export
-* ✅ OIDC SSO Functionality
-* ✅ Advanced User/Admin Controls
-* ✅ Paperless-ngx integration
-* ✅ Localization Support
-* ✅ Warranty Claim Tracking
-* ✅ Audit trail
-* [ ] Calendar Integration
-      
-## 🚀Setup
+## Quick Start
 
 ### Prerequisites
 
-*   Docker and Docker Compose installed on your system.
+- Docker
+- Docker Compose plugin (`docker compose`)
 
-## 🐋Pull Docker
+### 1) Clone and prepare env
 
-```
-services:
-  warracker:
-    image: ghcr.io/sassanix/warracker/main:latest
-    ports:
-      - "8005:80"
-    volumes:
-      - warracker_uploads:/data/uploads
-    env_file:
-      - .env
-    depends_on:
-      warrackerdb:
-        condition: service_healthy
-    restart: unless-stopped
-
-  warrackerdb:
-    image: postgres:15-alpine
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    env_file:
-      - .env
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  postgres_data:
-  warracker_uploads:
+```bash
+git clone https://github.com/PdB333/Warracker.git
+cd Warracker
+cp Docker/.env.example .env
 ```
 
-To get the docker compose file with environemts and .env example for warracker and the warrackerdb please go [here](https://github.com/sassanix/Warracker/tree/main/Docker)
+Edit `.env` for your environment.
 
-### Environment Variables (`.env`)
+### 2) Start stack
 
-Use `Docker/.env.example` as your baseline and copy it to `.env`.
+```bash
+docker compose up -d --build
+docker compose ps
+```
 
-#### Core app and database
+### 3) Access app
 
-| Variable | Default | Description |
+- HTTP mode (default compose mapping): `http://<host>:8005`
+- HTTPS mode (if enabled in env and certs mounted): `https://<host>:443`
+
+## Docker Compose Notes
+
+Current compose file exposes:
+- app container on host port `8005` -> container port `80`
+- postgres internal service `warrackerdb:5432`
+
+If you need host port `443`, adjust `docker-compose.yml` ports mapping accordingly.
+
+## Environment Variables Reference
+
+Use `Docker/.env.example` as baseline. The list below includes variables used by this fork and runtime.
+
+## Database and Core App
+
+| Variable | Default | Purpose |
 | --- | --- | --- |
 | `DB_HOST` | `warrackerdb` | PostgreSQL host |
 | `DB_PORT` | `5432` | PostgreSQL port |
-| `DB_NAME` | `warranty_db` | Database name |
+| `DB_NAME` | `warranty_db` | App DB name |
 | `DB_USER` | `warranty_user` | App DB user |
 | `DB_PASSWORD` | `warranty_password` | App DB password |
-| `DB_ADMIN_USER` | `warracker_admin` | Admin DB user used by migrations/permission setup |
+| `DB_ADMIN_USER` | `warracker_admin` | Admin DB user for setup/migrations |
 | `DB_ADMIN_PASSWORD` | `change_this_password_in_production` | Admin DB password |
 | `SECRET_KEY` | `your_very_secret_flask_key_change_me` | Flask/JWT secret |
-| `FRONTEND_URL` | `http://localhost:8005` | Public frontend URL used for redirects |
-| `APP_BASE_URL` | `http://localhost:8005` | Public app base URL used in links/emails |
-| `WARRACKER_MEMORY_MODE` | `optimized` | Worker/memory profile (`optimized`, `ultra-light`, `performance`) |
-| `MAX_UPLOAD_MB` | `16` | Max upload size in backend |
-| `NGINX_MAX_BODY_SIZE_VALUE` | `16M` | Nginx upload limit (keep aligned with `MAX_UPLOAD_MB`) |
-| `PYTHONUNBUFFERED` | `1` | Immediate Python log flushing in containers |
-| `REQUESTS_CA_BUNDLE` | unset | CA bundle path used by Python `requests` |
-| `SSL_CERT_FILE` | unset | CA bundle path for Python SSL/TLS validation |
+| `JWT_EXPIRATION_HOURS` | `24` | JWT expiration window |
+| `PYTHONUNBUFFERED` | `1` | Unbuffered python logs |
+| `WARRACKER_MEMORY_MODE` | `optimized` | Runtime memory profile (`optimized`, `ultra-light`, `performance`) |
 
-#### Database container (`warrackerdb`) variables
+## Postgres Container
 
-| Variable | Default | Description |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `POSTGRES_DB` | `warranty_test` (compose default) | Initial postgres database |
-| `POSTGRES_USER` | `warranty_user` (compose default) | Postgres user |
-| `POSTGRES_PASSWORD` | from `DB_PASSWORD` | Postgres user password |
+| `POSTGRES_DB` | `warranty_db` | Initial postgres DB |
+| `POSTGRES_USER` | `warranty_user` | Postgres user |
+| `POSTGRES_PASSWORD` | `warranty_password` | Postgres password |
 
-#### Email and notification mail delivery
+## URL and Upload Settings
 
-| Variable | Default | Description |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `SMTP_HOST` | `localhost` (compose often sets custom) | SMTP server host |
-| `SMTP_PORT` | `1025` (or `587` depending setup) | SMTP server port |
-| `SMTP_USERNAME` | `notifications@warracker.com` | SMTP username/login |
-| `SMTP_PASSWORD` | empty | SMTP password/login secret |
-| `SMTP_PASSWORD_FILE` | unset | Optional file path to read SMTP password from secret file |
-| `SMTP_USE_TLS` | `true` | Enable STARTTLS (typically for port `587`) |
-| `SMTP_USE_SSL` | `false` | Use direct SSL SMTP (typically port `465`) |
-| `SMTP_FROM_ADDRESS` | fallback to `SMTP_USERNAME` | Sender used by warranty expiration notification emails |
-| `SMTP_SENDER_EMAIL` | `noreply@warracker.com` | Sender used by auth/account emails (password reset, verification, etc.) |
+| `FRONTEND_URL` | `http://localhost:8005` | Public frontend URL for redirects |
+| `APP_BASE_URL` | `http://localhost:8005` | Base URL used in app links/emails |
+| `MAX_UPLOAD_MB` | `32` in example | Max backend upload size |
+| `NGINX_MAX_BODY_SIZE_VALUE` | `32M` in example | Nginx request body limit |
 
-#### OIDC / SSO
+## SMTP / Mail
 
-| Variable | Default | Description |
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SMTP_HOST` | `smtp.gmail.com` in example | SMTP server host |
+| `SMTP_PORT` | `587` in example | SMTP server port |
+| `SMTP_USERNAME` | empty/example value | SMTP auth username |
+| `SMTP_PASSWORD` | empty/example value | SMTP auth password |
+| `SMTP_PASSWORD_FILE` | unset | Optional file path for SMTP password secret |
+| `SMTP_USE_TLS` | `true` | Use STARTTLS |
+| `SMTP_USE_SSL` | `false` | Use direct SSL SMTP |
+| `SMTP_SENDER_EMAIL` | `noreply@warracker.com` | Sender for account/auth emails |
+| `SMTP_FROM_ADDRESS` | fallback to username | Sender for warranty notification emails |
+
+## OIDC / SSO
+
+| Variable | Default | Purpose |
 | --- | --- | --- |
 | `OIDC_ENABLED` | `false` | Enable OIDC login |
-| `OIDC_ONLY_MODE` | `false` | Disable local password login and force OIDC-only access |
-| `OIDC_PROVIDER_NAME` | `oidc` | Authlib provider name |
+| `OIDC_ONLY_MODE` | `false` | Force OIDC-only auth mode |
+| `OIDC_PROVIDER_NAME` | `oidc` | Provider name |
 | `OIDC_CLIENT_ID` | empty | OIDC client id |
 | `OIDC_CLIENT_SECRET` | empty | OIDC client secret |
-| `OIDC_CLIENT_SECRET_FILE` | unset | Optional secret file path for OIDC client secret |
-| `OIDC_ISSUER_URL` | empty | OIDC issuer URL (used for discovery) |
-| `OIDC_SCOPE` | `openid email profile` | Requested scope |
-| `OIDC_ADMIN_GROUP` | empty | Group/role name that should map users to admin |
-| `OIDC_FORCE_HTTPS` | `false` | Force https in generated OIDC callback redirect URL |
+| `OIDC_CLIENT_SECRET_FILE` | unset | Optional file path for OIDC client secret |
+| `OIDC_ISSUER_URL` | empty | OIDC issuer URL (discovery endpoint base) |
+| `OIDC_SCOPE` | `openid email profile` | OIDC scopes |
+| `OIDC_ADMIN_GROUP` | empty | Group/role name mapped to admin |
+| `OIDC_FORCE_HTTPS` | `false` | Force https callback URL generation |
 
-#### Apprise notifications
+## Apprise Notifications
 
-| Variable | Default | Description |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `APPRISE_ENABLED` | `false` | Enable Apprise notifications |
+| `APPRISE_ENABLED` | `false` | Enable Apprise channel |
 | `APPRISE_URLS` | empty | Comma-separated Apprise destinations |
-| `APPRISE_EXPIRATION_DAYS` | `7,30` | Days-before-expiration triggers |
-| `APPRISE_NOTIFICATION_TIME` | `09:00` | Daily send time (`HH:MM`) |
-| `APPRISE_TITLE_PREFIX` | `[Warracker]` | Prefix in Apprise notification titles |
+| `APPRISE_EXPIRATION_DAYS` | `7,30` | Trigger days before expiration |
+| `APPRISE_NOTIFICATION_TIME` | `09:00` | Daily send time |
+| `APPRISE_TITLE_PREFIX` | `[Warracker]` | Notification title prefix |
 
-## 📝 Usage
+## HTTPS / TLS (Optional In-Container TLS)
 
-### Accounts & Roles
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `NGINX_ENABLE_HTTPS` | `false` | Enable HTTPS listener in container |
+| `NGINX_SERVER_NAME` | `localhost` | Server name in nginx config |
+| `NGINX_SSL_CERT_PATH` | `/etc/nginx/certs/fullchain.pem` | TLS cert path in container |
+| `NGINX_SSL_KEY_PATH` | `/etc/nginx/certs/privkey.pem` | TLS key path in container |
+| `REQUESTS_CA_BUNDLE` | unset | CA bundle for outbound python requests |
+| `SSL_CERT_FILE` | unset | OpenSSL CA bundle path for python |
 
-- The **first account created** in the system will automatically become the **Admin account**.  
-- The Admin can manage other users, assign roles, and has full system permissions.  
-- Regular users can only manage their own warranties unless granted additional privileges by the Admin.  
+## Dev / Debug
 
-### Adding a Warranty
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `FLASK_ENV` | `production` | Flask environment |
+| `FLASK_DEBUG` | `false` | Debug mode |
+| `FLASK_RUN_PORT` | `5000` | Local flask run port |
 
-1. Fill in the product details by clicking on **Add Warranty**.  
-2. Enter the purchase date and warranty duration.  
-3. Optionally upload receipt/documentation.  
-4. Click the **Add Warranty** button.  
+## OIDC Setup Checklist (Keycloak Example)
 
-### Managing Warranties
+1. Set:
+   - `OIDC_ENABLED=true`
+   - `OIDC_CLIENT_ID=...`
+   - `OIDC_CLIENT_SECRET=...`
+   - `OIDC_ISSUER_URL=https://<keycloak>/realms/<realm>`
+   - `OIDC_SCOPE=openid email profile groups`
+2. Configure Keycloak mappers so groups/roles are present in token/userinfo.
+3. If using group-based admin mapping, set `OIDC_ADMIN_GROUP=<group_name>`.
+4. Ensure container trusts your IdP certificate chain (internal CA if needed).
 
-- Use the search box to filter warranties.  
-- Click the edit icon to modify warranty details.  
-- Click the delete icon to remove a warranty.  
+## Notification Behavior (Important)
 
+- Standard email notifications go to warranty owner email.
+- Additional notification emails can be attached to a warranty.
+- Multiple additional recipients are supported in this fork.
+- If owner account is removed and warranty is detached, notification fallback can target owner/admin recipient logic.
 
-<details>
-<summary><strong>Product Information Entry Requirements for CSV import</strong></summary>
+## Migrations
 
-Click on **Data** > **Import**
+Migrations live in `backend/migrations` and are applied on container startup.
 
-| Field Name     | Format / Example                          | Required?                                              | Notes                                                                 |
-|----------------|-------------------------------------------|--------------------------------------------------------|-----------------------------------------------------------------------|
-| **ProductName** | Text                                       | ✅ Yes                                                  | Provide the name of the product.                                     |
-| **PurchaseDate** | Date (`YYYY-MM-DD`, e.g., `2024-05-21`)   | ✅ Yes                                                  | Use ISO format only.                                                 |
-| **WarrantyDurationYears** | Whole Number (`0`, `1`, `5`)      | ✅ Yes, if `IsLifetime` is `FALSE` and Months/Days are 0/blank. At least one duration field (Years, Months, Days) must be non-zero if not lifetime. | Represents the years part of the warranty. Can be combined with Months and Days. |
-| **WarrantyDurationMonths** | Whole Number (`0`, `6`, `18`)    | ✅ Yes, if `IsLifetime` is `FALSE` and Years/Days are 0/blank. At least one duration field (Years, Months, Days) must be non-zero if not lifetime. | Represents the months part of the warranty. Can be combined with Years and Days. Max 11 if Years also provided. |
-| **WarrantyDurationDays** | Whole Number (`0`, `15`, `90`)     | ✅ Yes, if `IsLifetime` is `FALSE` and Years/Months are 0/blank. At least one duration field (Years, Months, Days) must be non-zero if not lifetime. | Represents the days part of the warranty. Can be combined with Years and Months. Max 29/30 if Months also provided. |
-| **ExpirationDate** | Date (`YYYY-MM-DD`, e.g., `2031-10-08`)   | ❌ No (Optional)                                        | Use this if duration fields are 0 and `IsLifetime` is `FALSE`.       |
-| **IsLifetime**  | `TRUE` or `FALSE` (case-insensitive)       | ❌ No (Optional)                                        | If omitted, defaults to `FALSE`. If `TRUE`, duration fields are ignored. |
-| **PurchasePrice** | Number (`199.99`, `50`)                  | ❌ No (Optional)                                        | Cannot be negative if provided.                                      |
-| **SerialNumber** | Text (`SN123`, `SN123,SN456`)             | ❌ No (Optional)                                        | For multiple values, separate with commas.                           |
-| **ProductURL**   | Text (URL format)                         | ❌ No (Optional)                                        | Full URL to product page (optional field). https://producturl.com                           |
-| **Vendor**       | Text                                      | ❌ No (Optional)                                        | Name of the vendor or seller where the product was purchased.        |
-| **Tags**         | Text (`tag1,tag2`)                        | ❌ No (Optional)                                        | Use comma-separated values for multiple tags.                        |
-</details>
-
----
-
-
-## 🌐 Localization Support
-
-Warracker offers **full multilingual UI support** with **18 languages**, including **RTL (Right-to-Left) support**, instant language switching, and native name display.
-
-<details>
-    
-<summary><strong>Supported Languages</strong></summary>
-
-| Language | Code | Native Name | Notes |
-|---|---:|---|---|
-| <img src="https://flagcdn.com/16x12/sa.png" width="16" height="12" alt="SA"> Arabic | ar | العربية | *RTL Support* |
-| <img src="https://flagcdn.com/16x12/cz.png" width="16" height="12" alt="CZ"> Czech | cs | Čeština | |
-| <img src="https://flagcdn.com/16x12/de.png" width="16" height="12" alt="DE"> German | de | Deutsch | |
-| <img src="https://flagcdn.com/16x12/gb.png" width="16" height="12" alt="GB"> English | en | English | *Default* |
-| <img src="https://flagcdn.com/16x12/es.png" width="16" height="12" alt="ES"> Spanish | es | Español | |
-| <img src="https://flagcdn.com/16x12/ir.png" width="16" height="12" alt="IR"> Persian | fa | فارسی | *RTL Support* |
-| <img src="https://flagcdn.com/16x12/fr.png" width="16" height="12" alt="FR"> French | fr | Français | |
-| <img src="https://flagcdn.com/16x12/in.png" width="16" height="12" alt="IN"> Hindi | hi | हिन्दी | |
-| <img src="https://flagcdn.com/16x12/it.png" width="16" height="12" alt="IT"> Italian | it | Italiano | |
-| <img src="https://flagcdn.com/16x12/jp.png" width="16" height="12" alt="JP"> Japanese | ja | 日本語 | |
-| <img src="https://flagcdn.com/16x12/kr.png" width="16" height="12" alt="KR"> Korean | ko | 한국어 | |
-| <img src="https://flagcdn.com/16x12/nl.png" width="16" height="12" alt="NL"> Dutch | nl | Nederlands | |
-| <img src="https://flagcdn.com/16x12/pt.png" width="16" height="12" alt="PT"> Portuguese | pt | Português | |
-| <img src="https://flagcdn.com/16x12/ru.png" width="16" height="12" alt="RU"> Russian | ru | Русский | |
-| <img src="https://flagcdn.com/16x12/ua.png" width="16" height="12" alt="UA"> Ukrainian | uk | Українська | |
-| <img src="https://flagcdn.com/16x12/cn.png" width="16" height="12" alt="CN"> Chinese (Simplified) | zh_CN | 简体中文 | |
-| <img src="https://flagcdn.com/16x12/hk.png" width="16" height="12" alt="HK"> Chinese (Hong Kong) | zh_HK | 繁體中文 (香港) | |
-| <img src="https://flagcdn.com/16x12/tr.png" width="16" height="12" alt="TR"> Turkish | tr | Türkçe | |
-| <img src="https://flagcdn.com/16x12/pl.png" width="16" height="12" alt="PL"> Polish | pl | Polski | |
-| <img src="https://flagcdn.com/16x12/il.png" width="16" height="12" alt="IL"> Hebrew | he | עברית | *RTL Support* |
-
----
-
-### Language Selection Features
-
-- **Auto-Detection:** Automatically detects browser language on first visit  
-- **User Preference:** Saves individual language choice to user profile  
-- **Native Names:** Dropdown displays language names in native scripts for clarity  
-- **Instant Switching:** Change languages in real-time without page reload  
-
-</details>
-
----
-
-## Why I Built This
-
-Warracker was born from personal frustration with warranty confusion. When my father’s dishwasher broke, we had the invoice and assumed it was under warranty, only to find out we were referencing the wrong one, and the warranty had ended by a couple of months.
-
-That experience, along with others like it, made me realize how common and avoidable these issues are. So I built **Warracker**, a simple, organized way to track purchases, receipts, and warranties. It has already saved me money by reminding me to get car repairs done before my warranty expired.
-
-Inspired by [**Wallos**](https://github.com/ellite/Wallos), I wanted to bring the same clarity to warranties that it brought to subscriptions and share it with anyone who's ever been burned by missed coverage.
-
+Notable recent migrations:
+- `051_create_email_change_tokens_table.sql`
+- `052_enforce_case_insensitive_email_uniqueness.sql`
+- `053_add_additional_notification_email_to_warranties.sql`
+- `054_expand_additional_notification_email_to_text.sql`
 
 ## Contributing
 
-We welcome contributions and appreciate your interest in improving this project! To get started, please follow these steps:
+Contributions are welcome.
 
+Recommended flow:
 
-### How to Contribute
+```bash
+git checkout -b feature/my-change
+git commit -m "feat: describe change"
+git push origin feature/my-change
+```
 
-1. **Fork** the repository.
-2. **Create a branch** for your changes:
-   `git checkout -b feature/amazing-feature`
-3. **Commit** your changes:
-   `git commit -m "Add: amazing feature"`
-4. **Push** to your forked repository:
-   `git push origin feature/amazing-feature`
-5. **Open a Pull Request** with a clear explanation of your changes.
+Then open a PR.
 
-### 📌Contribution Guidelines
+If your change should also exist upstream, please keep compatibility with upstream architecture where possible.
 
-* **Start with an issue**: Before submitting a Pull Request, ensure the change has been discussed in an issue.
-* **Help is welcome**: Check the [issues](../../issues) for open discussions or areas where help is needed.
-* **Keep it focused**: Each Pull Request should focus on a single change or feature.
-* **Follow project style**: Match the project's code style and naming conventions.
-* **Be respectful**: We value inclusive and constructive collaboration.
+## Upstream Sync (Maintainers)
 
-### 🤝Contributors:  
-<a href="https://github.com/sassanix/warracker/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=sassanix/warracker" />
-</a>
+If you maintain this fork and want to sync with upstream:
 
-### ❤️Supporters:
+```bash
+git remote add upstream https://github.com/sassanix/Warracker.git
+git fetch upstream
+git checkout main
+git merge upstream/main
+```
 
-[<img src="https://avatars.githubusercontent.com/u/8194208?u=7ee82feed0044f85bcfc39f001643fe81a188f66&v=4&s=50" width="50"/>](https://github.com/SirSpidey)
-[<img src="https://avatars.githubusercontent.com/u/6196195?v=4&s=50" width="50"/>](https://github.com/keithellis74)
-[<img src="https://avatars.githubusercontent.com/u/79404036?v=4&s=50" width="50"/>](https://github.com/CristianKerr)
-[<img src="https://avatars.githubusercontent.com/u/145632931?v=4&s=50" width="50"/>](https://github.com/rssmithtx)
-[<img src="https://avatars.githubusercontent.com/u/110860055?v=4&s=50" width="50"/>](https://github.com/Morethanevil)
+Resolve conflicts, test, then push.
 
+## License and Credits
 
-
-[![Support Warracker](https://img.shields.io/badge/Support-Warracker-red?style=for-the-badge&logo=github-sponsors)](https://buymeacoffee.com/sassanix)
-
-
-## Join Our Community
-
-[![Join our Discord server!](https://invidget.switchblade.xyz/PGxVS3U2Nw)](https://discord.gg/PGxVS3U2Nw)
-
-Want to discuss the project or need help? Join our Discord community!
-
-## 📜License
-
-This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
-
-## 🙏Acknowledgements
-
-*   Flask
-*   PostgreSQL
-*   Docker
-*   Chart.js
-*   Apprise
-*   i18next
-
-
-## ⭐Star History
-<a href="https://star-history.com/#sassanix/Warracker&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=sassanix/Warracker&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=sassanix/Warracker&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=sassanix/Warracker&type=Date" />
- </picture>
-</a>
+- License: AGPL-3.0 (see `LICENSE`)
+- Original project and core credit: `sassanix/Warracker`
+- This fork adds deployment and behavior changes listed above
