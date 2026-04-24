@@ -216,9 +216,9 @@
     "additional_notification_email_optional": "E-mail de notification supplémentaire (facultatif)",
     "add_notification_email": "Ajouter un autre e-mail",
     "notification_email_placeholder": "nom@exemple.com",
-    "reminder_days_optional": "Jours de rappel (facultatif)",
-    "reminder_days_placeholder": "ex. 30,7,1",
-    "reminder_days_help": "Jours avant expiration, séparés par des virgules. Exemple : 30,7,1"
+    "reminder_days_optional": "Rappels personnalisés (facultatif)",
+    "reminder_days_placeholder": "ex : 30, 7, 1",
+    "reminder_days_help": "Exemple \"30, 7, 1\" = rappels à J-30, J-7 et J-1. Laissez vide pour utiliser le réglage global."
   },
   "settings": {
     "title": "Paramètres",

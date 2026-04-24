@@ -219,9 +219,9 @@
     "additional_notification_email_optional": "Additional notification email (optional)",
     "add_notification_email": "Add another email",
     "notification_email_placeholder": "name@example.com",
-    "reminder_days_optional": "Reminder days (optional)",
-    "reminder_days_placeholder": "e.g. 30,7,1",
-    "reminder_days_help": "Comma-separated days before expiration. Example: 30,7,1"
+    "reminder_days_optional": "Custom reminder days (optional)",
+    "reminder_days_placeholder": "e.g. 30, 7, 1",
+    "reminder_days_help": "Example \"30, 7, 1\" = reminders at D-30, D-7 and D-1. Leave empty to use the global setting."
   },
   "settings": {
     "title": "Warracker - Settings",
