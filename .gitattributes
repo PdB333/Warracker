@@ -1,0 +1,6 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Force LF line endings for shell scripts (required for Docker/Linux)
+*.sh text eol=lf
+Docker/*.sh text eol=lf

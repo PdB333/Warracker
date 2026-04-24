@@ -1,0 +1,13 @@
+# .dockerignore
+
+# Ignore git files
+.git
+.gitignore
+
+# Ignore developer scripts and tools
+scripts/
+
+# Ignore local development files
+*.pyc
+__pycache__/
+.env

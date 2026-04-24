@@ -1,0 +1,73 @@
+# --- Python ---
+# Byte-compiled / optimized / C extension files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.env/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Project-Specific ---
+
+# Environment variables
+# CRITICAL: This file contains secrets and should NEVER be committed.
+# An example file (.env.example) should be used as a template instead.
+.env
+
+# User-uploaded files (receipts, manuals, photos)
+# This directory is stateful data and does not belong in version control.
+/uploads/
+
+# Docker-managed volumes for persistent data
+# These are stateful and should not be committed.
+/postgres_data/
+/warracker_uploads/
+
+# Developer/diagnostic scripts, not part of the core application.
+scripts/
+
+# --- IDE / Editor Configuration ---
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- OS-generated files ---
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+
+# --- Log files ---
+*.log
+logs/

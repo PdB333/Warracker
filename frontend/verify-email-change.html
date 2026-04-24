@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Email Change - Warracker</title>
+    <link rel="stylesheet" href="style.css?v=20250119004">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css">
+    <script src="theme-loader.js?v=20250119001"></script>
+    <style>
+        .verify-page {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: var(--bg-color);
+        }
+
+        .verify-card {
+            width: 100%;
+            max-width: 640px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 28px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        }
+
+        .verify-icon {
+            font-size: 2rem;
+            margin-bottom: 14px;
+        }
+
+        .verify-icon.success {
+            color: var(--success-color, #2f9e44);
+        }
+
+        .verify-icon.error {
+            color: var(--danger-color, #e03131);
+        }
+
+        .verify-icon.loading {
+            color: var(--primary-color, #228be6);
+        }
+
+        .verify-title {
+            margin: 0 0 10px 0;
+            color: var(--text-color);
+        }
+
+        .verify-message {
+            margin: 0;
+            color: var(--text-color);
+            line-height: 1.45;
+        }
+
+        .verify-details {
+            margin-top: 10px;
+            color: var(--text-muted, #6c757d);
+            font-size: 0.95rem;
+        }
+
+        .verify-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+    <main class="verify-page">
+        <section class="verify-card">
+            <i id="verifyIcon" class="verify-icon loading fas fa-spinner fa-spin" aria-hidden="true"></i>
+            <h1 id="verifyTitle" class="verify-title">Verifying your email change...</h1>
+            <p id="verifyMessage" class="verify-message">Please wait while we validate your link.</p>
+            <p id="verifyDetails" class="verify-details"></p>
+            <div class="verify-actions">
+                <a id="loginLink" href="login.html" class="btn btn-primary" style="display: none;">Go to Login</a>
+                <a id="settingsLink" href="settings-new.html" class="btn btn-secondary" style="display: none;">Go to Settings</a>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        function setViewState(state, title, message, details, showLogin, showSettings) {
+            const icon = document.getElementById('verifyIcon');
+            const titleEl = document.getElementById('verifyTitle');
+            const messageEl = document.getElementById('verifyMessage');
+            const detailsEl = document.getElementById('verifyDetails');
+            const loginLink = document.getElementById('loginLink');
+            const settingsLink = document.getElementById('settingsLink');
+
+            icon.className = 'verify-icon';
+            if (state === 'success') {
+                icon.classList.add('success', 'fas', 'fa-circle-check');
+            } else if (state === 'error') {
+                icon.classList.add('error', 'fas', 'fa-circle-xmark');
+            } else {
+                icon.classList.add('loading', 'fas', 'fa-spinner', 'fa-spin');
+            }
+
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+            detailsEl.textContent = details || '';
+            loginLink.style.display = showLogin ? 'inline-block' : 'none';
+            settingsLink.style.display = showSettings ? 'inline-block' : 'none';
+        }
+
+        async function verifyEmailChange() {
+            const params = new URLSearchParams(window.location.search);
+            const token = params.get('token');
+
+            if (!token) {
+                setViewState(
+                    'error',
+                    'Invalid verification link',
+                    'The verification token is missing.',
+                    'Please request a new email change from your account settings.',
+                    true,
+                    false
+                );
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/verify-email-change', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: token })
+                });
+
+                let payload = null;
+                try {
+                    payload = await response.json();
+                } catch (e) {
+                    payload = null;
+                }
+
+                const apiMessage = payload && payload.message ? payload.message : '';
+
+                if (response.ok) {
+                    setViewState(
+                        'success',
+                        'Email updated successfully',
+                        apiMessage || 'Your new email address has been verified.',
+                        'You can now continue using your account.',
+                        true,
+                        false
+                    );
+                    return;
+                }
+
+                setViewState(
+                    'error',
+                    'Email verification failed',
+                    apiMessage || 'We could not verify your email change request.',
+                    'If the link has expired, request a new email change from settings.',
+                    true,
+                    true
+                );
+            } catch (error) {
+                setViewState(
+                    'error',
+                    'Unable to verify right now',
+                    'A network or server error occurred while verifying your link.',
+                    'Please try again in a moment.',
+                    true,
+                    false
+                );
+            }
+        }
+
+        verifyEmailChange();
+    </script>
+</body>
+</html>
