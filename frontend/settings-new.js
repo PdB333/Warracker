@@ -996,8 +996,8 @@ async function loadPreferences() {
         dateFormatSelect.value = storedDateFormat;
         console.log(`Loaded dateFormat from localStorage: ${storedDateFormat}`);
     } else if (dateFormatSelect) {
-        dateFormatSelect.value = 'MDY'; // Default if not found
-        console.log('dateFormat not found in localStorage, defaulting to MDY');
+        dateFormatSelect.value = 'DMY'; // Default if not found
+        console.log('dateFormat not found in localStorage, defaulting to DMY');
     }
     // --- End Date Format Section ---
 
@@ -1132,7 +1132,7 @@ async function loadPreferences() {
                 }
 
                  // --- Update Date Format from API Prefs --- Add this check
-                 const storedDateFormat = localStorage.getItem('dateFormat') || 'MDY'; // Default if null
+                 const storedDateFormat = localStorage.getItem('dateFormat') || 'DMY'; // Default if null
                  if (apiPrefs.date_format && dateFormatSelect) {
                       if (apiPrefs.date_format !== storedDateFormat) {
                          console.log(`API date_format (${apiPrefs.date_format}) differs from localStorage (${storedDateFormat}). Updating UI.`);
@@ -1780,7 +1780,7 @@ async function savePreferences() {
     const preferencesToSave = {
         default_view: defaultViewSelect ? defaultViewSelect.value : 'grid',
         expiring_soon_days: expiringSoonDaysInput ? parseInt(expiringSoonDaysInput.value) : 30,
-        date_format: dateFormatSelect ? dateFormatSelect.value : 'MDY',
+        date_format: dateFormatSelect ? dateFormatSelect.value : 'DMY',
         theme: isDark ? 'dark' : 'light',  // Use current UI state, not old localStorage
         paperless_view_in_app: paperlessViewInAppToggle ? paperlessViewInAppToggle.checked : false,
         preferred_language: languageSelect ? languageSelect.value : 'en',  // Include language preference

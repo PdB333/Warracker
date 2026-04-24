@@ -771,6 +771,18 @@ def update_warranty(warranty_id):
                     additional_notification_email = parse_additional_notification_emails_from_form(request.form)
                 except ValueError as exc:
                     return jsonify({"error": str(exc)}), 400
+            updated_owner_user_id = None
+            raw_owner_user_id = request.form.get('user_id', '').strip() if 'user_id' in request.form else ''
+            if raw_owner_user_id:
+                if not is_admin:
+                    return jsonify({"error": "Only administrators can change warranty owner"}), 403
+                try:
+                    updated_owner_user_id = int(raw_owner_user_id)
+                except ValueError:
+                    return jsonify({"error": "Invalid owner user ID"}), 400
+                cur.execute('SELECT id FROM users WHERE id = %s', (updated_owner_user_id,))
+                if not cur.fetchone():
+                    return jsonify({"error": "Selected owner user not found"}), 400
             
             # Get URL fields for documents
             invoice_url = request.form.get('invoice_url', None)
@@ -1126,6 +1138,9 @@ def update_warranty(warranty_id):
             if 'additional_notification_email' in request.form or 'additional_notification_email[]' in request.form:
                 sql_fields.append("additional_notification_email = %s")
                 sql_values.append(additional_notification_email)
+            if updated_owner_user_id is not None:
+                sql_fields.append("user_id = %s")
+                sql_values.append(updated_owner_user_id)
 
             sql_fields.append("updated_at = NOW()") # Use SQL function, no parameter needed
             sql_values.append(warranty_id)

@@ -203,6 +203,8 @@ let selectedTags = []; // Will hold objects with id, name, color
 
 // Global variable for edit mode tags
 let editSelectedTags = [];
+let ownerUsersCache = null;
+let ownerUsersPromise = null;
 
 // DOM Elements
 const warrantyForm = document.getElementById('warrantyForm');
@@ -245,6 +247,8 @@ const additionalNotificationEmailsContainer = document.getElementById('additiona
 const editAdditionalNotificationEmailsContainer = document.getElementById('editAdditionalNotificationEmailsContainer');
 const addAdditionalNotificationEmailBtn = document.getElementById('addAdditionalNotificationEmailBtn');
 const addEditAdditionalNotificationEmailBtn = document.getElementById('addEditAdditionalNotificationEmailBtn');
+const editOwnerGroup = document.getElementById('editOwnerGroup');
+const editOwnerSelect = document.getElementById('editOwnerSelect');
 
 // CSV Import Elements
 const importBtn = document.getElementById('importBtn');
@@ -1512,6 +1516,109 @@ function resetForm() {
     setAdditionalNotificationEmails([], false);
 }
 
+function getOwnerSelectPlaceholder() {
+    if (window.t && typeof window.t === 'function') {
+        return window.t('warranties.select_owner');
+    }
+    return 'Select owner...';
+}
+
+function getAuthTokenForApi() {
+    return (window.auth && typeof window.auth.getToken === 'function')
+        ? window.auth.getToken()
+        : localStorage.getItem('auth_token');
+}
+
+async function fetchOwnerUsers() {
+    if (ownerUsersCache) {
+        return ownerUsersCache;
+    }
+    if (ownerUsersPromise) {
+        return ownerUsersPromise;
+    }
+
+    const token = getAuthTokenForApi();
+    if (!token) {
+        throw new Error('Authentication required');
+    }
+
+    ownerUsersPromise = fetch('/api/admin/users', {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    })
+        .then(async (response) => {
+            if (!response.ok) {
+                let errorMessage = 'Failed to load users';
+                try {
+                    const data = await response.json();
+                    errorMessage = data.message || data.error || errorMessage;
+                } catch (_) {
+                    // Keep default message when response is not JSON
+                }
+                throw new Error(errorMessage);
+            }
+            return response.json();
+        })
+        .then((users) => {
+            ownerUsersCache = Array.isArray(users) ? users : [];
+            return ownerUsersCache;
+        })
+        .finally(() => {
+            ownerUsersPromise = null;
+        });
+
+    return ownerUsersPromise;
+}
+
+function formatOwnerOptionLabel(user) {
+    const firstName = (user.first_name || '').trim();
+    const lastName = (user.last_name || '').trim();
+    const fullName = `${firstName} ${lastName}`.trim();
+    const username = (user.username || '').trim();
+    const email = (user.email || '').trim();
+    const baseLabel = fullName || username || email || `User #${user.id}`;
+    return email && email !== baseLabel ? `${baseLabel} (${email})` : baseLabel;
+}
+
+function populateEditOwnerSelect(users, selectedUserId) {
+    if (!editOwnerSelect) {
+        return;
+    }
+    const normalizedUsers = Array.isArray(users)
+        ? [...users].sort((a, b) => formatOwnerOptionLabel(a).localeCompare(formatOwnerOptionLabel(b), undefined, { sensitivity: 'base' }))
+        : [];
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = getOwnerSelectPlaceholder();
+    editOwnerSelect.innerHTML = '';
+    editOwnerSelect.appendChild(placeholder);
+
+    normalizedUsers.forEach((user) => {
+        const option = document.createElement('option');
+        option.value = String(user.id);
+        option.textContent = formatOwnerOptionLabel(user);
+        editOwnerSelect.appendChild(option);
+    });
+
+    if (selectedUserId !== null && selectedUserId !== undefined && selectedUserId !== '') {
+        const selectedOwner = String(selectedUserId);
+        const hasSelectedOwner = normalizedUsers.some((user) => String(user.id) === selectedOwner);
+        if (hasSelectedOwner) {
+            editOwnerSelect.value = selectedOwner;
+        } else {
+            const missingOption = document.createElement('option');
+            missingOption.value = selectedOwner;
+            missingOption.textContent = `[Deleted User] #${selectedOwner}`;
+            editOwnerSelect.appendChild(missingOption);
+            editOwnerSelect.value = selectedOwner;
+        }
+    }
+}
+
 function translateWithFallback(key, fallback) {
     if (typeof window.t === 'function') {
         const translated = window.t(key);
@@ -1543,6 +1650,7 @@ function createAdditionalNotificationEmailRow(value = '', isEdit = false, index 
     row.style.gap = '8px';
     row.style.marginBottom = '8px';
     row.style.alignItems = 'center';
+    row.style.width = '100%';
 
     const input = document.createElement('input');
     input.type = 'email';
@@ -1556,12 +1664,23 @@ function createAdditionalNotificationEmailRow(value = '', isEdit = false, index 
         input.id = 'additionalNotificationEmail';
     }
     input.setAttribute('data-i18n-placeholder', 'warranties.notification_email_placeholder');
+    input.style.flex = '1 1 auto';
+    input.style.minWidth = '0';
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'btn btn-danger btn-sm remove-additional-notification-email-btn';
     removeBtn.innerHTML = '<i class="fas fa-minus"></i>';
     removeBtn.style.flexShrink = '0';
+    removeBtn.style.width = '42px';
+    removeBtn.style.minWidth = '42px';
+    removeBtn.style.maxWidth = '42px';
+    removeBtn.style.height = '42px';
+    removeBtn.style.padding = '0';
+    removeBtn.style.display = 'inline-flex';
+    removeBtn.style.alignItems = 'center';
+    removeBtn.style.justifyContent = 'center';
+    removeBtn.style.lineHeight = '1';
     removeBtn.addEventListener('click', () => {
         const container = getAdditionalNotificationEmailsContainer(isEdit);
         if (!container) return;
@@ -2318,8 +2437,8 @@ async function loadWarranties(isAuthenticated) { // Added isAuthenticated parame
                 } else {
                      // If API doesn't return date_format, ensure localStorage has a default
                      if (!localStorage.getItem('dateFormat')) {
-                         localStorage.setItem('dateFormat', 'MDY');
-                         console.log('API did not return date_format, setting localStorage default to MDY');
+                         localStorage.setItem('dateFormat', 'DMY');
+                         console.log('API did not return date_format, setting localStorage default to DMY');
                      }
                 }
                 // --- END ADDED SECTION ---
@@ -2329,16 +2448,16 @@ async function loadWarranties(isAuthenticated) { // Added isAuthenticated parame
                  console.warn('Failed to fetch preferences:', prefsResponse.status);
                  // Ensure a default date format exists if fetch fails
                  if (!localStorage.getItem('dateFormat')) {
-                     localStorage.setItem('dateFormat', 'MDY');
-                     console.log('Preferences fetch failed, setting localStorage default date format to MDY');
+                     localStorage.setItem('dateFormat', 'DMY');
+                     console.log('Preferences fetch failed, setting localStorage default date format to DMY');
                  }
             }
         } catch (error) {
             console.error('Error loading preferences:', error);
             // Ensure a default date format exists on error
             if (!localStorage.getItem('dateFormat')) {
-                localStorage.setItem('dateFormat', 'MDY');
-                console.log('Error fetching preferences, setting localStorage default date format to MDY');
+                localStorage.setItem('dateFormat', 'DMY');
+                console.log('Error fetching preferences, setting localStorage default date format to DMY');
             }
             // Continue loading warranties even if preferences fail
         }
@@ -2479,8 +2598,8 @@ function formatDate(date) {
         return 'N/A';
     }
 
-    // Get the user's preferred format from localStorage, default to MDY
-    const formatPreference = localStorage.getItem('dateFormat') || 'MDY';
+    // Get the user's preferred format from localStorage, default to DMY
+    const formatPreference = localStorage.getItem('dateFormat') || 'DMY';
 
     // Manually extract UTC components to avoid timezone discrepancies
     const year = date.getUTCFullYear();
@@ -2497,8 +2616,6 @@ function formatDate(date) {
     const monthAbbr = monthNames[monthIndex];
 
     switch (formatPreference) {
-        case 'DMY':
-            return `${dayPadded}/${monthPadded}/${year}`;
         case 'YMD':
             return `${year}-${monthPadded}-${dayPadded}`;
         case 'MDY_WORDS': // Added
@@ -2508,8 +2625,10 @@ function formatDate(date) {
         case 'YMD_WORDS': // Added
             return `${year} ${monthAbbr} ${day}`;
         case 'MDY':
-        default:
             return `${monthPadded}/${dayPadded}/${year}`;
+        case 'DMY':
+        default:
+            return `${dayPadded}/${monthPadded}/${year}`;
     }
 }
 
@@ -3410,6 +3529,22 @@ async function openEditModal(warranty) {
         editCurrencySelect.value = warranty.currency;
     }
     document.getElementById('editVendor').value = warranty.vendor || '';
+
+    if (editOwnerGroup && editOwnerSelect) {
+        if (getUserType() === 'admin') {
+            editOwnerGroup.style.display = 'block';
+            try {
+                const users = await fetchOwnerUsers();
+                populateEditOwnerSelect(users, warranty.user_id);
+            } catch (error) {
+                console.error('Failed to load users for owner selector:', error);
+                populateEditOwnerSelect([], warranty.user_id);
+            }
+        } else {
+            editOwnerGroup.style.display = 'none';
+            populateEditOwnerSelect([], null);
+        }
+    }
     
     // Populate URL fields for documents (with null checks)
     const editInvoiceUrl = document.getElementById('editInvoiceUrl');
@@ -6608,6 +6743,14 @@ function saveWarranty() {
         }
     }
     formData.append('warranty_type', warrantyTypeValue);
+
+    if (getUserType() === 'admin' && editOwnerSelect && editOwnerGroup && editOwnerGroup.style.display !== 'none') {
+        const selectedOwnerId = editOwnerSelect.value ? editOwnerSelect.value.trim() : '';
+        if (selectedOwnerId) {
+            formData.append('user_id', selectedOwnerId);
+        }
+    }
+
     formData.delete('additional_notification_email');
     formData.delete('additional_notification_email[]');
     const editAdditionalNotificationEmails = getAdditionalNotificationEmails(true);
@@ -7876,21 +8019,21 @@ async function loadAndApplyUserPreferences(isAuthenticated) { // Added isAuthent
                 const errorData = await response.json().catch(() => ({}));
                 console.warn(`[Prefs Loader] Failed to load preferences from API: ${response.status}`, errorData.message || '');
                 // Set defaults in localStorage maybe?
-                if (!localStorage.getItem('dateFormat')) localStorage.setItem('dateFormat', 'MDY');
+                if (!localStorage.getItem('dateFormat')) localStorage.setItem('dateFormat', 'DMY');
                 if (!localStorage.getItem(`${prefix}currencySymbol`)) localStorage.setItem(`${prefix}currencySymbol`, '$');
                 // etc.
             }
         } catch (error) {
             console.error('[Prefs Loader] Error fetching/applying preferences from API:', error);
             // Set defaults in localStorage on error?
-            if (!localStorage.getItem('dateFormat')) localStorage.setItem('dateFormat', 'MDY');
+            if (!localStorage.getItem('dateFormat')) localStorage.setItem('dateFormat', 'DMY');
             if (!localStorage.getItem(`${prefix}currencySymbol`)) localStorage.setItem(`${prefix}currencySymbol`, '$');
             // etc.
         }
     } else {
         console.warn('[Prefs Loader] Cannot load preferences: User not authenticated or auth module not available.');
         // Apply defaults if not authenticated?
-         if (!localStorage.getItem('dateFormat')) localStorage.setItem('dateFormat', 'MDY');
+         if (!localStorage.getItem('dateFormat')) localStorage.setItem('dateFormat', 'DMY');
          if (!localStorage.getItem(`${prefix}currencySymbol`)) localStorage.setItem(`${prefix}currencySymbol`, '$');
          // etc.
     }

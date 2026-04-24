@@ -856,7 +856,7 @@ def get_preferences():
                     'timezone': 'UTC',
                     'notification_channel': 'email',
                     'currency_symbol': '$',
-                    'date_format': 'MDY',
+                    'date_format': 'DMY',
                     'paperless_view_in_app': False
                 }
                 return jsonify(default_preferences), 200
@@ -883,7 +883,7 @@ def get_preferences():
                     'notification_time': preferences_data[5],
                     'timezone': preferences_data[6],
                     'currency_symbol': preferences_data[7] if preferences_data[7] else '$',
-                    'date_format': preferences_data[8] if preferences_data[8] else 'MDY',
+                    'date_format': preferences_data[8] if preferences_data[8] else 'DMY',
                     'notification_channel': preferences_data[9] if preferences_data[9] else 'email',
                     'apprise_notification_time': preferences_data[10] if preferences_data[10] else '09:00',
                     'apprise_notification_frequency': preferences_data[11] if preferences_data[11] else 'daily',
@@ -909,7 +909,7 @@ def get_preferences():
                     'timezone': 'UTC',
                     'notification_channel': 'email',
                     'currency_symbol': '$',
-                    'date_format': 'MDY',
+                    'date_format': 'DMY',
                     'currency_position': 'left',
                     'paperless_view_in_app': False,
                     'preferred_language': preferred_language
@@ -930,7 +930,7 @@ def get_preferences():
                 'timezone': 'UTC',
                 'notification_channel': 'email',
                 'currency_symbol': '$',
-                'date_format': 'MDY',
+                'date_format': 'DMY',
                 'currency_position': 'left',
                 'paperless_view_in_app': False,
                 'preferred_language': 'en'
@@ -952,7 +952,7 @@ def get_preferences():
             'timezone': 'UTC',
             'notification_channel': 'email',
             'currency_symbol': '$',
-            'date_format': 'MDY',
+            'date_format': 'DMY',
             'currency_position': 'left',
             'paperless_view_in_app': False,
             'preferred_language': 'en'
@@ -1082,7 +1082,7 @@ def update_preferences():
                 cursor.execute("""
                     INSERT INTO user_preferences (user_id, default_view, theme, expiring_soon_days, currency_symbol, currency_position, date_format, notification_channel, notification_frequency, notification_time, apprise_notification_time, apprise_notification_frequency, timezone, apprise_timezone, paperless_view_in_app)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (user_id, default_view or 'grid', theme or 'light', expiring_soon_days or 30, currency_symbol or '$', currency_position or 'left', date_format or 'MDY', notification_channel or 'email', notification_frequency or 'daily', notification_time or '09:00', apprise_notification_time or '09:00', apprise_notification_frequency or 'daily', timezone or 'UTC', apprise_timezone or 'UTC', paperless_view_in_app if paperless_view_in_app is not None else False))
+                """, (user_id, default_view or 'grid', theme or 'light', expiring_soon_days or 30, currency_symbol or '$', currency_position or 'left', date_format or 'DMY', notification_channel or 'email', notification_frequency or 'daily', notification_time or '09:00', apprise_notification_time or '09:00', apprise_notification_frequency or 'daily', timezone or 'UTC', apprise_timezone or 'UTC', paperless_view_in_app if paperless_view_in_app is not None else False))
                 
                 # Update language preference in users table separately
                 if preferred_language is not None:
@@ -1112,7 +1112,7 @@ def update_preferences():
                     'notification_time': preferences_data[5],
                     'timezone': preferences_data[6],
                     'currency_symbol': preferences_data[7] if preferences_data[7] else '$',
-                    'date_format': preferences_data[8] if preferences_data[8] else 'MDY',
+                    'date_format': preferences_data[8] if preferences_data[8] else 'DMY',
                     'notification_channel': preferences_data[9] if preferences_data[9] else 'email',
                     'apprise_notification_time': preferences_data[10] if preferences_data[10] else '09:00',
                     'apprise_notification_frequency': preferences_data[11] if preferences_data[11] else 'daily',
@@ -1133,7 +1133,7 @@ def update_preferences():
                     'timezone': timezone or 'UTC',
                     'notification_channel': notification_channel or 'email',
                     'currency_symbol': currency_symbol or '$',
-                    'date_format': date_format or 'MDY',
+                    'date_format': date_format or 'DMY',
                     'currency_position': currency_position or 'left',
                     'apprise_notification_time': apprise_notification_time or '09:00',
                     'apprise_notification_frequency': apprise_notification_frequency or 'daily',
