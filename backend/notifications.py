@@ -12,6 +12,8 @@ import time
 import atexit
 import smtplib
 import logging
+from html import escape
+from pathlib import Path
 from datetime import datetime, date, UTC, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -52,6 +54,40 @@ except ImportError:
 # Configure logging
 logger = logging.getLogger(__name__)
 
+EMAIL_TEMPLATE_DIR = Path(__file__).resolve().parent / 'email_templates'
+DEFAULT_EXPIRATION_EMAIL_SUBJECT = "Warracker: Upcoming Warranty Expirations"
+DEFAULT_EXPIRATION_EMAIL_TEXT_TEMPLATE = (
+    "{greeting}\n\n"
+    "The following warranties are expiring soon:\n\n"
+    "{warranty_lines_text}\n\n"
+    "Log in to Warracker to view details:\n"
+    "{email_base_url}\n\n"
+    "Manage your notification settings:\n"
+    "{settings_url}\n"
+)
+DEFAULT_EXPIRATION_EMAIL_HTML_TEMPLATE = """\
+<html>
+  <head></head>
+  <body>
+    <p>{greeting}</p>
+    <p>The following warranties are expiring soon:</p>
+    <table border="1" style="border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th style="padding: 8px; text-align: left;">Product Name</th>
+          <th style="padding: 8px; text-align: left;">Expiration Date</th>
+        </tr>
+      </thead>
+      <tbody>
+{warranty_rows_html}
+      </tbody>
+    </table>
+    <p>Log in to <a href="{email_base_url}">Warracker</a> to view details.</p>
+    <p>Manage your notification settings <a href="{settings_url}">here</a>.</p>
+  </body>
+</html>
+"""
+
 # Global variables for notification management
 notification_lock = threading.Lock()
 last_notification_sent = {}
@@ -77,6 +113,34 @@ def _normalize_email_address(email):
         return None
     normalized = str(email).strip().lower()
     return normalized or None
+
+
+def _extract_notification_emails(raw_value):
+    """Parse additional notification emails stored as comma-separated values."""
+    if not raw_value:
+        return []
+
+    emails = []
+    seen = set()
+    for item in str(raw_value).split(','):
+        normalized = _normalize_email_address(item)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        emails.append(normalized)
+    return emails
+
+
+def _load_email_template(template_name, fallback_value):
+    """Load email template content from disk with safe fallback."""
+    template_path = EMAIL_TEMPLATE_DIR / template_name
+    try:
+        if template_path.exists():
+            return template_path.read_text(encoding='utf-8')
+        logger.warning(f"Email template not found: {template_path}. Using fallback.")
+    except Exception as e:
+        logger.warning(f"Failed to load email template {template_path}: {e}. Using fallback.")
+    return fallback_value
 
 def _get_orphan_warranty_recipient(conn):
     """
@@ -266,7 +330,7 @@ def format_expiration_email(user, warranties, get_db_connection, release_db_conn
     Format an email notification for expiring warranties.
     Returns a MIMEMultipart email object with both text and HTML versions.
     """
-    subject = "Warracker: Upcoming Warranty Expirations"
+    subject_template = _load_email_template('expiration_subject.txt', DEFAULT_EXPIRATION_EMAIL_SUBJECT)
     
     # Get email base URL from settings with correct precedence
     # Priority: Environment Variable > Database Setting > Hardcoded Default
@@ -296,52 +360,42 @@ def format_expiration_email(user, warranties, get_db_connection, release_db_conn
     recipient_first_name = (user.get('first_name') or '').strip()
     greeting_text = f"Hello {recipient_first_name}," if recipient_first_name else "Hello,"
 
-    # Create both plain text and HTML versions of the email body
-    text_body = f"{greeting_text}\\n\\n"
-    text_body += "The following warranties are expiring soon:\\n\\n"
-    
-    html_body = f"""\
-    <html>
-      <head></head>
-      <body>
-        <p>{greeting_text}</p>
-        <p>The following warranties are expiring soon:</p>
-        <table border="1" style="border-collapse: collapse;">
-          <thead>
-            <tr>
-              <th style="padding: 8px; text-align: left;">Product Name</th>
-              <th style="padding: 8px; text-align: left;">Expiration Date</th>
-            </tr>
-          </thead>
-          <tbody>
-    """
-
+    text_rows = []
+    html_rows = []
     for warranty in warranties:
         product_label = warranty['product_name']
         if warranty.get('is_orphaned'):
             product_label = f"[Deleted User] {product_label}"
+        expiration_date = warranty['expiration_date']
 
-        text_body += f"- {product_label} (expires on {warranty['expiration_date']})\\n"
-        html_body += f"""\
-            <tr>
-              <td style="padding: 8px;">{product_label}</td>
-              <td style="padding: 8px;">{warranty['expiration_date']}</td>
-            </tr>
-        """
+        text_rows.append(f"- {product_label} (expires on {expiration_date})")
+        html_rows.append(
+            "        <tr>\n"
+            f"          <td style=\"padding: 8px;\">{escape(str(product_label))}</td>\n"
+            f"          <td style=\"padding: 8px;\">{escape(str(expiration_date))}</td>\n"
+            "        </tr>"
+        )
 
-    text_body += "\\nLog in to Warracker to view details:\\n"
-    text_body += f"{email_base_url}\\n\\n"
-    text_body += "Manage your notification settings:\\n"
-    text_body += f"{email_base_url}/settings-new.html\\n"
+    context = {
+        'greeting': greeting_text,
+        'warranty_lines_text': '\n'.join(text_rows),
+        'warranty_rows_html': '\n'.join(html_rows),
+        'email_base_url': email_base_url,
+        'settings_url': f"{email_base_url}/settings-new.html",
+    }
 
-    html_body += f"""\
-          </tbody>
-        </table>
-        <p>Log in to <a href="{email_base_url}">Warracker</a> to view details.</p> 
-        <p>Manage your notification settings <a href="{email_base_url}/settings-new.html">here</a>.</p>
-      </body>
-    </html>
-    """
+    text_template = _load_email_template('expiration_body.txt', DEFAULT_EXPIRATION_EMAIL_TEXT_TEMPLATE)
+    html_template = _load_email_template('expiration_body.html', DEFAULT_EXPIRATION_EMAIL_HTML_TEMPLATE)
+
+    try:
+        subject = subject_template.format(**context).strip()
+        text_body = text_template.format(**context)
+        html_body = html_template.format(**context)
+    except KeyError as e:
+        logger.error(f"Email template variable missing: {e}. Falling back to built-in templates.")
+        subject = DEFAULT_EXPIRATION_EMAIL_SUBJECT
+        text_body = DEFAULT_EXPIRATION_EMAIL_TEXT_TEMPLATE.format(**context)
+        html_body = DEFAULT_EXPIRATION_EMAIL_HTML_TEMPLATE.format(**context)
 
     # Create a MIMEMultipart object for both text and HTML
     msg = MIMEMultipart('alternative')
@@ -433,7 +487,8 @@ def process_email_notifications(all_warranties, eligible_user_ids, is_manual, ge
             continue
 
         add_recipient_warranty(owner_email, warranty, is_owner_recipient=True)
-        add_recipient_warranty(additional_email, warranty, is_owner_recipient=False)
+        for extra_email in _extract_notification_emails(additional_email):
+            add_recipient_warranty(extra_email, warranty, is_owner_recipient=False)
     
     if not users_warranties:
         logger.info("No users to notify via email")

@@ -214,7 +214,10 @@
     "add_any_notes_placeholder": "Add any notes about this warranty...",
     "add_serial_number": "Add another serial number",
     "model_number_optional": "Model Number (Optional)",
-    "model_number_placeholder": "e.g. SM-G991U1"
+    "model_number_placeholder": "e.g. SM-G991U1",
+    "additional_notification_email_optional": "Additional notification email (optional)",
+    "add_notification_email": "Add another email",
+    "notification_email_placeholder": "name@example.com"
   },
   "settings": {
     "title": "Warracker - Settings",

@@ -241,6 +241,10 @@ const saveWarrantyBtn = document.getElementById('saveWarrantyBtn');
 const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
 const loadingContainer = document.getElementById('loadingContainer');
 const toastContainer = document.getElementById('toastContainer');
+const additionalNotificationEmailsContainer = document.getElementById('additionalNotificationEmailsContainer');
+const editAdditionalNotificationEmailsContainer = document.getElementById('editAdditionalNotificationEmailsContainer');
+const addAdditionalNotificationEmailBtn = document.getElementById('addAdditionalNotificationEmailBtn');
+const addEditAdditionalNotificationEmailBtn = document.getElementById('addEditAdditionalNotificationEmailBtn');
 
 // CSV Import Elements
 const importBtn = document.getElementById('importBtn');
@@ -581,6 +585,8 @@ async function saveThemePreference(isDark, saveToApi = true) {
 
 // Initialization logic on DOMContentLoaded
 document.addEventListener('DOMContentLoaded', function() {
+    initializeAdditionalNotificationEmailInputs();
+
     // Register Service Worker
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -1503,6 +1509,143 @@ function resetForm() {
     if (productPhotoPreview) {
         productPhotoPreview.style.display = 'none';
     } 
+    setAdditionalNotificationEmails([], false);
+}
+
+function translateWithFallback(key, fallback) {
+    if (typeof window.t === 'function') {
+        const translated = window.t(key);
+        if (translated && translated !== key) {
+            return translated;
+        }
+    }
+    return fallback;
+}
+
+function parseAdditionalNotificationEmails(rawValue) {
+    if (!rawValue || typeof rawValue !== 'string') {
+        return [];
+    }
+    return rawValue
+        .split(',')
+        .map(email => email.trim())
+        .filter(Boolean);
+}
+
+function getAdditionalNotificationEmailsContainer(isEdit = false) {
+    return isEdit ? editAdditionalNotificationEmailsContainer : additionalNotificationEmailsContainer;
+}
+
+function createAdditionalNotificationEmailRow(value = '', isEdit = false, index = 0) {
+    const row = document.createElement('div');
+    row.className = 'additional-notification-email-row';
+    row.style.display = 'flex';
+    row.style.gap = '8px';
+    row.style.marginBottom = '8px';
+    row.style.alignItems = 'center';
+
+    const input = document.createElement('input');
+    input.type = 'email';
+    input.name = 'additional_notification_email[]';
+    input.className = 'form-control';
+    input.placeholder = translateWithFallback('warranties.notification_email_placeholder', 'name@example.com');
+    input.value = value || '';
+    if (isEdit && index === 0) {
+        input.id = 'editAdditionalNotificationEmail';
+    } else if (!isEdit && index === 0) {
+        input.id = 'additionalNotificationEmail';
+    }
+    input.setAttribute('data-i18n-placeholder', 'warranties.notification_email_placeholder');
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'btn btn-danger btn-sm remove-additional-notification-email-btn';
+    removeBtn.innerHTML = '<i class="fas fa-minus"></i>';
+    removeBtn.style.flexShrink = '0';
+    removeBtn.addEventListener('click', () => {
+        const container = getAdditionalNotificationEmailsContainer(isEdit);
+        if (!container) return;
+        row.remove();
+        updateAdditionalNotificationEmailRemoveButtons(isEdit);
+        if (container.children.length === 0) {
+            container.appendChild(createAdditionalNotificationEmailRow('', isEdit, 0));
+            updateAdditionalNotificationEmailRemoveButtons(isEdit);
+        }
+    });
+
+    row.appendChild(input);
+    row.appendChild(removeBtn);
+    return row;
+}
+
+function updateAdditionalNotificationEmailRemoveButtons(isEdit = false) {
+    const container = getAdditionalNotificationEmailsContainer(isEdit);
+    if (!container) return;
+
+    const rows = Array.from(container.querySelectorAll('.additional-notification-email-row'));
+    rows.forEach((row, index) => {
+        const input = row.querySelector('input[name="additional_notification_email[]"]');
+        if (input) {
+            input.id = (isEdit ? 'editAdditionalNotificationEmail' : 'additionalNotificationEmail') + (index === 0 ? '' : `_${index}`);
+        }
+        const removeBtn = row.querySelector('.remove-additional-notification-email-btn');
+        if (!removeBtn) return;
+        removeBtn.style.visibility = rows.length <= 1 ? 'hidden' : 'visible';
+    });
+}
+
+function setAdditionalNotificationEmails(values, isEdit = false) {
+    const container = getAdditionalNotificationEmailsContainer(isEdit);
+    if (!container) return;
+
+    const normalizedValues = Array.isArray(values)
+        ? values.map(v => (typeof v === 'string' ? v.trim() : '')).filter(Boolean)
+        : [];
+
+    container.innerHTML = '';
+    if (normalizedValues.length === 0) {
+        container.appendChild(createAdditionalNotificationEmailRow('', isEdit, 0));
+    } else {
+        normalizedValues.forEach((value, index) => {
+            container.appendChild(createAdditionalNotificationEmailRow(value, isEdit, index));
+        });
+    }
+    updateAdditionalNotificationEmailRemoveButtons(isEdit);
+}
+
+function getAdditionalNotificationEmails(isEdit = false) {
+    const container = getAdditionalNotificationEmailsContainer(isEdit);
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('input[name="additional_notification_email[]"]'))
+        .map(input => input.value.trim())
+        .filter(Boolean);
+}
+
+function initializeAdditionalNotificationEmailInputs() {
+    setAdditionalNotificationEmails([], false);
+    setAdditionalNotificationEmails([], true);
+
+    if (addAdditionalNotificationEmailBtn && !addAdditionalNotificationEmailBtn.dataset.listenerAttached) {
+        addAdditionalNotificationEmailBtn.addEventListener('click', () => {
+            const container = getAdditionalNotificationEmailsContainer(false);
+            if (!container) return;
+            const rowCount = container.querySelectorAll('.additional-notification-email-row').length;
+            container.appendChild(createAdditionalNotificationEmailRow('', false, rowCount));
+            updateAdditionalNotificationEmailRemoveButtons(false);
+        });
+        addAdditionalNotificationEmailBtn.dataset.listenerAttached = '1';
+    }
+
+    if (addEditAdditionalNotificationEmailBtn && !addEditAdditionalNotificationEmailBtn.dataset.listenerAttached) {
+        addEditAdditionalNotificationEmailBtn.addEventListener('click', () => {
+            const container = getAdditionalNotificationEmailsContainer(true);
+            if (!container) return;
+            const rowCount = container.querySelectorAll('.additional-notification-email-row').length;
+            container.appendChild(createAdditionalNotificationEmailRow('', true, rowCount));
+            updateAdditionalNotificationEmailRemoveButtons(true);
+        });
+        addEditAdditionalNotificationEmailBtn.dataset.listenerAttached = '1';
+    }
 }
 
 async function exportWarranties() {
@@ -3252,10 +3395,7 @@ async function openEditModal(warranty) {
     if (editModelNumberInput) {
         editModelNumberInput.value = warranty.model_number || '';
     }
-    const editAdditionalNotificationEmailInput = document.getElementById('editAdditionalNotificationEmail');
-    if (editAdditionalNotificationEmailInput) {
-        editAdditionalNotificationEmailInput.value = warranty.additional_notification_email || '';
-    }
+    setAdditionalNotificationEmails(parseAdditionalNotificationEmails(warranty.additional_notification_email), true);
     document.getElementById('editPurchaseDate').value = warranty.purchase_date.split('T')[0];
     // Populate new duration fields
     document.getElementById('editWarrantyDurationYears').value = warranty.warranty_duration_years || 0;
@@ -3949,9 +4089,13 @@ async function handleFormSubmit(event) { // Made async to properly await paperle
     if (modelNumberInput && modelNumberInput.value.trim() !== '') {
         formData.set('model_number', modelNumberInput.value.trim());
     }
-    const additionalNotificationEmailInput = document.getElementById('additionalNotificationEmail');
-    if (additionalNotificationEmailInput) {
-        formData.set('additional_notification_email', additionalNotificationEmailInput.value.trim());
+    formData.delete('additional_notification_email');
+    formData.delete('additional_notification_email[]');
+    const additionalNotificationEmails = getAdditionalNotificationEmails(false);
+    if (additionalNotificationEmails.length === 0) {
+        formData.append('additional_notification_email[]', '');
+    } else {
+        additionalNotificationEmails.forEach(email => formData.append('additional_notification_email[]', email));
     }
     
     // Handle warranty type - use custom value if "other" is selected
@@ -6464,8 +6608,14 @@ function saveWarranty() {
         }
     }
     formData.append('warranty_type', warrantyTypeValue);
-    const editAdditionalNotificationEmail = document.getElementById('editAdditionalNotificationEmail');
-    formData.append('additional_notification_email', editAdditionalNotificationEmail ? editAdditionalNotificationEmail.value.trim() : '');
+    formData.delete('additional_notification_email');
+    formData.delete('additional_notification_email[]');
+    const editAdditionalNotificationEmails = getAdditionalNotificationEmails(true);
+    if (editAdditionalNotificationEmails.length === 0) {
+        formData.append('additional_notification_email[]', '');
+    } else {
+        editAdditionalNotificationEmails.forEach(email => formData.append('additional_notification_email[]', email));
+    }
     
     // Add selected Paperless documents for edit form
     const selectedEditPaperlessProductPhoto = document.getElementById('selectedEditPaperlessProductPhoto');
@@ -6778,6 +6928,7 @@ function resetAddWarrantyWizard() {
             }
         });
     }
+    setAdditionalNotificationEmails([], false);
 
     // Reset serial numbers container (remove all but the first input structure)
     if (serialNumbersContainer) {

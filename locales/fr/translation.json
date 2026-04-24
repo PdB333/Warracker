@@ -211,7 +211,10 @@
     "files_short": "Fichiers",
     "enter_serial_number": "Entrer le numéro de série",
     "model_number_optional": "Numéro de modèle (facultatif)",
-    "add_serial_number": "Ajouter un autre numéro de série"
+    "add_serial_number": "Ajouter un autre numéro de série",
+    "additional_notification_email_optional": "E-mail de notification supplémentaire (facultatif)",
+    "add_notification_email": "Ajouter un autre e-mail",
+    "notification_email_placeholder": "nom@exemple.com"
   },
   "settings": {
     "title": "Paramètres",

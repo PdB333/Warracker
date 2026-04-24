@@ -1,0 +1,20 @@
+<html>
+  <head></head>
+  <body>
+    <p>{greeting}</p>
+    <p>The following warranties are expiring soon:</p>
+    <table border="1" style="border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th style="padding: 8px; text-align: left;">Product Name</th>
+          <th style="padding: 8px; text-align: left;">Expiration Date</th>
+        </tr>
+      </thead>
+      <tbody>
+{warranty_rows_html}
+      </tbody>
+    </table>
+    <p>Log in to <a href="{email_base_url}">Warracker</a> to view details.</p>
+    <p>Manage your notification settings <a href="{settings_url}">here</a>.</p>
+  </body>
+</html>

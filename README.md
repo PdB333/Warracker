@@ -231,6 +231,78 @@ volumes:
 
 To get the docker compose file with environemts and .env example for warracker and the warrackerdb please go [here](https://github.com/sassanix/Warracker/tree/main/Docker)
 
+### Environment Variables (`.env`)
+
+Use `Docker/.env.example` as your baseline and copy it to `.env`.
+
+#### Core app and database
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `DB_HOST` | `warrackerdb` | PostgreSQL host |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `DB_NAME` | `warranty_db` | Database name |
+| `DB_USER` | `warranty_user` | App DB user |
+| `DB_PASSWORD` | `warranty_password` | App DB password |
+| `DB_ADMIN_USER` | `warracker_admin` | Admin DB user used by migrations/permission setup |
+| `DB_ADMIN_PASSWORD` | `change_this_password_in_production` | Admin DB password |
+| `SECRET_KEY` | `your_very_secret_flask_key_change_me` | Flask/JWT secret |
+| `FRONTEND_URL` | `http://localhost:8005` | Public frontend URL used for redirects |
+| `APP_BASE_URL` | `http://localhost:8005` | Public app base URL used in links/emails |
+| `WARRACKER_MEMORY_MODE` | `optimized` | Worker/memory profile (`optimized`, `ultra-light`, `performance`) |
+| `MAX_UPLOAD_MB` | `16` | Max upload size in backend |
+| `NGINX_MAX_BODY_SIZE_VALUE` | `16M` | Nginx upload limit (keep aligned with `MAX_UPLOAD_MB`) |
+| `PYTHONUNBUFFERED` | `1` | Immediate Python log flushing in containers |
+| `REQUESTS_CA_BUNDLE` | unset | CA bundle path used by Python `requests` |
+| `SSL_CERT_FILE` | unset | CA bundle path for Python SSL/TLS validation |
+
+#### Database container (`warrackerdb`) variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `POSTGRES_DB` | `warranty_test` (compose default) | Initial postgres database |
+| `POSTGRES_USER` | `warranty_user` (compose default) | Postgres user |
+| `POSTGRES_PASSWORD` | from `DB_PASSWORD` | Postgres user password |
+
+#### Email and notification mail delivery
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SMTP_HOST` | `localhost` (compose often sets custom) | SMTP server host |
+| `SMTP_PORT` | `1025` (or `587` depending setup) | SMTP server port |
+| `SMTP_USERNAME` | `notifications@warracker.com` | SMTP username/login |
+| `SMTP_PASSWORD` | empty | SMTP password/login secret |
+| `SMTP_PASSWORD_FILE` | unset | Optional file path to read SMTP password from secret file |
+| `SMTP_USE_TLS` | `true` | Enable STARTTLS (typically for port `587`) |
+| `SMTP_USE_SSL` | `false` | Use direct SSL SMTP (typically port `465`) |
+| `SMTP_FROM_ADDRESS` | fallback to `SMTP_USERNAME` | Sender used by warranty expiration notification emails |
+| `SMTP_SENDER_EMAIL` | `noreply@warracker.com` | Sender used by auth/account emails (password reset, verification, etc.) |
+
+#### OIDC / SSO
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OIDC_ENABLED` | `false` | Enable OIDC login |
+| `OIDC_ONLY_MODE` | `false` | Disable local password login and force OIDC-only access |
+| `OIDC_PROVIDER_NAME` | `oidc` | Authlib provider name |
+| `OIDC_CLIENT_ID` | empty | OIDC client id |
+| `OIDC_CLIENT_SECRET` | empty | OIDC client secret |
+| `OIDC_CLIENT_SECRET_FILE` | unset | Optional secret file path for OIDC client secret |
+| `OIDC_ISSUER_URL` | empty | OIDC issuer URL (used for discovery) |
+| `OIDC_SCOPE` | `openid email profile` | Requested scope |
+| `OIDC_ADMIN_GROUP` | empty | Group/role name that should map users to admin |
+| `OIDC_FORCE_HTTPS` | `false` | Force https in generated OIDC callback redirect URL |
+
+#### Apprise notifications
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `APPRISE_ENABLED` | `false` | Enable Apprise notifications |
+| `APPRISE_URLS` | empty | Comma-separated Apprise destinations |
+| `APPRISE_EXPIRATION_DAYS` | `7,30` | Days-before-expiration triggers |
+| `APPRISE_NOTIFICATION_TIME` | `09:00` | Daily send time (`HH:MM`) |
+| `APPRISE_TITLE_PREFIX` | `[Warracker]` | Prefix in Apprise notification titles |
+
 ## 📝 Usage
 
 ### Accounts & Roles

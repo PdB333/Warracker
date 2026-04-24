@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 warranties_bp = Blueprint('warranties_bp', __name__)
 NOTIFICATION_EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+MAX_ADDITIONAL_NOTIFICATION_EMAILS = 10
 
 
 
@@ -49,19 +50,49 @@ def convert_decimals(obj):
         return obj
 
 
-def parse_optional_notification_email(value):
-    """Normalize and validate an optional notification email."""
-    if value is None:
+def parse_optional_notification_emails(values):
+    """Normalize and validate optional additional notification emails."""
+    if values is None:
         return None
 
-    email = value.strip()
-    if not email:
+    normalized_emails = []
+    seen = set()
+
+    for raw_value in values:
+        if raw_value is None:
+            continue
+        for item in str(raw_value).split(','):
+            email = item.strip().lower()
+            if not email:
+                continue
+            if len(email) > 254 or not NOTIFICATION_EMAIL_REGEX.match(email):
+                raise ValueError("Invalid additional notification email address")
+            if email in seen:
+                continue
+            seen.add(email)
+            normalized_emails.append(email)
+
+    if len(normalized_emails) > MAX_ADDITIONAL_NOTIFICATION_EMAILS:
+        raise ValueError(
+            f"Too many additional notification email addresses (max {MAX_ADDITIONAL_NOTIFICATION_EMAILS})"
+        )
+
+    if not normalized_emails:
         return None
 
-    if len(email) > 254 or not NOTIFICATION_EMAIL_REGEX.match(email):
-        raise ValueError("Invalid additional notification email address")
+    return ", ".join(normalized_emails)
 
-    return email
+
+def parse_additional_notification_emails_from_form(form_data):
+    """Extract additional notification email values from current and legacy form keys."""
+    values = []
+
+    if 'additional_notification_email[]' in form_data:
+        values.extend(form_data.getlist('additional_notification_email[]'))
+    elif 'additional_notification_email' in form_data:
+        values.append(form_data.get('additional_notification_email'))
+
+    return parse_optional_notification_emails(values)
 
 @warranties_bp.route('/warranties', methods=['GET'])
 @token_required
@@ -268,9 +299,7 @@ def add_warranty():
         warranty_type = request.form.get('warranty_type', None)
         model_number = request.form.get('model_number', None)
         try:
-            additional_notification_email = parse_optional_notification_email(
-                request.form.get('additional_notification_email')
-            )
+            additional_notification_email = parse_additional_notification_emails_from_form(request.form)
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
         
@@ -737,11 +766,9 @@ def update_warranty(warranty_id):
             warranty_type = request.form.get('warranty_type', None)
             model_number = request.form.get('model_number', None)
             additional_notification_email = None
-            if 'additional_notification_email' in request.form:
+            if 'additional_notification_email' in request.form or 'additional_notification_email[]' in request.form:
                 try:
-                    additional_notification_email = parse_optional_notification_email(
-                        request.form.get('additional_notification_email')
-                    )
+                    additional_notification_email = parse_additional_notification_emails_from_form(request.form)
                 except ValueError as exc:
                     return jsonify({"error": str(exc)}), 400
             
@@ -1096,7 +1123,7 @@ def update_warranty(warranty_id):
             if 'other_document_url' in request.form:
                 sql_fields.append("other_document_url = %s")
                 sql_values.append(request.form.get('other_document_url'))
-            if 'additional_notification_email' in request.form:
+            if 'additional_notification_email' in request.form or 'additional_notification_email[]' in request.form:
                 sql_fields.append("additional_notification_email = %s")
                 sql_values.append(additional_notification_email)
 
