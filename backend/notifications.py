@@ -293,15 +293,18 @@ def format_expiration_email(user, warranties, get_db_connection, release_db_conn
     # Ensure base URL doesn't end with a slash
     email_base_url = email_base_url.rstrip('/')
     
+    recipient_first_name = (user.get('first_name') or '').strip()
+    greeting_text = f"Hello {recipient_first_name}," if recipient_first_name else "Hello,"
+
     # Create both plain text and HTML versions of the email body
-    text_body = f"Hello {user['first_name']},\\n\\n"
+    text_body = f"{greeting_text}\\n\\n"
     text_body += "The following warranties are expiring soon:\\n\\n"
     
     html_body = f"""\
     <html>
       <head></head>
       <body>
-        <p>Hello {user['first_name']},</p>
+        <p>{greeting_text}</p>
         <p>The following warranties are expiring soon:</p>
         <table border="1" style="border-collapse: collapse;">
           <thead>
@@ -393,19 +396,25 @@ def process_email_notifications(all_warranties, eligible_user_ids, is_manual, ge
     # Group warranties by recipient (owner email + optional additional recipient email)
     users_warranties = {}
 
-    def add_recipient_warranty(recipient_email, warranty):
+    def add_recipient_warranty(recipient_email, warranty, is_owner_recipient=False):
         normalized_email = _normalize_email_address(recipient_email)
         if not normalized_email:
             return
+
+        owner_email_normalized = _normalize_email_address(warranty.get('email'))
+        owner_first_name = (warranty.get('first_name') or '').strip()
+        recipient_first_name = owner_first_name if (is_owner_recipient and normalized_email == owner_email_normalized) else ''
 
         if normalized_email not in users_warranties:
             users_warranties[normalized_email] = {
                 'email': normalized_email,
                 'user_id': warranty.get('user_id'),
-                'first_name': warranty.get('first_name') or 'User',
+                'first_name': recipient_first_name,
                 'warranties': [],
                 'warranty_ids': set()
             }
+        elif not users_warranties[normalized_email].get('first_name') and recipient_first_name:
+            users_warranties[normalized_email]['first_name'] = recipient_first_name
 
         warranty_id = warranty.get('warranty_id')
         if warranty_id is not None:
@@ -423,8 +432,8 @@ def process_email_notifications(all_warranties, eligible_user_ids, is_manual, ge
         if not is_manual and user_id not in eligible_user_ids:
             continue
 
-        add_recipient_warranty(owner_email, warranty)
-        add_recipient_warranty(additional_email, warranty)
+        add_recipient_warranty(owner_email, warranty, is_owner_recipient=True)
+        add_recipient_warranty(additional_email, warranty, is_owner_recipient=False)
     
     if not users_warranties:
         logger.info("No users to notify via email")
