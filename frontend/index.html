@@ -22,7 +22,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png?v=2">
     <link rel="apple-touch-icon" sizes="180x180" href="img/favicon-512x512.png">
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="style.css?v=20250119004">
+    <link rel="stylesheet" href="style.css?v=20260428001">
     <script src="theme-loader.js?v=20250119001"></script> <!-- Apply theme early -->
 
     <!-- Font Awesome for icons -->
@@ -288,9 +288,10 @@
                                 </button>
                                 <div id="viewMenu" class="popover" style="min-width: 160px;">
                                     <ul class="sort-options">
-                                        <li id="viewGridOption"><i class="fas fa-th-large"></i> <span>Grid</span></li>
-                                        <li id="viewListOption"><i class="fas fa-list"></i> <span>List</span></li>
-                                        <li id="viewTableOption"><i class="fas fa-table"></i> <span>Table</span></li>
+                                        <li id="viewGridOption"><i class="fas fa-th-large"></i> <span data-i18n="filters.grid">Grid</span></li>
+                                        <li id="viewListOption"><i class="fas fa-list"></i> <span data-i18n="filters.list">List</span></li>
+                                        <li id="viewTableOption"><i class="fas fa-table"></i> <span data-i18n="filters.table">Table</span></li>
+                                        <li id="viewCalendarOption"><i class="fas fa-calendar-days"></i> <span data-i18n="filters.calendar">Calendar</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -326,6 +327,9 @@
                                     </button>
                                     <button id="tableViewBtn" class="view-btn" title="Table View">
                                         <i class="fas fa-table"></i>
+                                    </button>
+                                    <button id="calendarViewBtn" class="view-btn" title="Calendar View">
+                                        <i class="fas fa-calendar-days"></i>
                                     </button>
                                 </div>
                             </div>
@@ -1356,7 +1360,7 @@
     </div>
     
     <script src="auth.js?v=20250119001"></script>
-    <script src="script.js?v=20260423002"></script>
+    <script src="script.js?v=20260428002"></script>
     <script>
         // Lightweight UI logic for Filter/Sort popovers (no change to core logic)
         document.addEventListener('DOMContentLoaded', function () {
@@ -1367,6 +1371,7 @@
             var viewGridOption = document.getElementById('viewGridOption');
             var viewListOption = document.getElementById('viewListOption');
             var viewTableOption = document.getElementById('viewTableOption');
+            var viewCalendarOption = document.getElementById('viewCalendarOption');
             var currentViewLabel = document.getElementById('currentViewLabel');
             var scopeDropdown = document.getElementById('scopeDropdown');
             var scopeMenuBtn = document.getElementById('scopeMenuBtn');
@@ -1464,6 +1469,7 @@
                             if (wl) {
                                 if (wl.classList.contains('list-view')) currentType = 'list';
                                 else if (wl.classList.contains('table-view')) currentType = 'table';
+                                else if (wl.classList.contains('calendar-view')) currentType = 'calendar';
                             } else {
                                 var prefixV = (window.getPreferenceKeyPrefix ? window.getPreferenceKeyPrefix() : 'user_');
                                 var savedV = localStorage.getItem(prefixV + 'defaultView') || localStorage.getItem(prefixV + 'warrantyView') || 'grid';
@@ -1483,6 +1489,9 @@
                         } else if (viewType === 'table') {
                             icon.classList.add('fa-table');
                             icon.setAttribute('aria-label', 'Table');
+                        } else if (viewType === 'calendar') {
+                            icon.classList.add('fa-calendar-days');
+                            icon.setAttribute('aria-label', 'Calendar');
                         } else {
                             icon.classList.add('fa-th-large');
                             icon.setAttribute('aria-label', 'Grid');
@@ -1493,11 +1502,13 @@
                         if (viewGridOption) viewGridOption.classList.toggle('active', viewType === 'grid');
                         if (viewListOption) viewListOption.classList.toggle('active', viewType === 'list');
                         if (viewTableOption) viewTableOption.classList.toggle('active', viewType === 'table');
+                        if (viewCalendarOption) viewCalendarOption.classList.toggle('active', viewType === 'calendar');
                     } catch (e) { /* no-op */ }
                 }
                 if (viewGridOption) viewGridOption.addEventListener('click', function () { if (window.switchView) window.switchView('grid'); setViewIconFrom('grid'); viewMenu.classList.remove('active'); });
                 if (viewListOption) viewListOption.addEventListener('click', function () { if (window.switchView) window.switchView('list'); setViewIconFrom('list'); viewMenu.classList.remove('active'); });
                 if (viewTableOption) viewTableOption.addEventListener('click', function () { if (window.switchView) window.switchView('table'); setViewIconFrom('table'); viewMenu.classList.remove('active'); });
+                if (viewCalendarOption) viewCalendarOption.addEventListener('click', function () { if (window.switchView) window.switchView('calendar'); setViewIconFrom('calendar'); viewMenu.classList.remove('active'); });
                 // Initialize label from saved preference
                 try {
                     var prefix = (window.getPreferenceKeyPrefix ? window.getPreferenceKeyPrefix() : 'user_');

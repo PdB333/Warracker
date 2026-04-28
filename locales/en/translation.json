@@ -423,8 +423,17 @@
     "tags": "Tags",
     "vendor": "Vendor",
     "warranty_type": "Warranty Type",
+    "grid": "Grid",
+    "list": "List",
+    "table": "Table",
+    "calendar": "Calendar",
     "view": "View",
     "scope": "Scope"
+  },
+  "calendar": {
+    "today": "Today",
+    "previous_month": "Previous month",
+    "next_month": "Next month"
   },
   "messages": {
     "success": "Success",

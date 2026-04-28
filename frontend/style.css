@@ -2996,6 +2996,127 @@ input.invalid {
   margin-bottom: 4px;
 }
 
+/* Calendar View */
+.warranties-list.calendar-view {
+  display: block;
+  margin-top: 20px;
+}
+
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.calendar-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-month-label {
+  font-weight: 700;
+  font-size: 1.05rem;
+  text-transform: capitalize;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--card-bg);
+}
+
+.calendar-weekday {
+  padding: 10px 8px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.calendar-day {
+  min-height: 130px;
+  padding: 8px;
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calendar-grid > :nth-child(7n) {
+  border-right: none;
+}
+
+.calendar-day-number {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.calendar-day.today .calendar-day-number {
+  color: var(--primary-color);
+}
+
+.calendar-day.today {
+  background: rgba(52, 152, 219, 0.08);
+}
+
+.calendar-day.outside-month {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.calendar-day-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.calendar-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 5px 6px;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  background: rgba(46, 204, 113, 0.12);
+  color: var(--text-color);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-item.expiring {
+  background: rgba(241, 196, 15, 0.18);
+}
+
+.calendar-item.expired {
+  background: rgba(231, 76, 60, 0.16);
+}
+
+.calendar-item.archived {
+  background: rgba(127, 127, 127, 0.2);
+}
+
+.calendar-item:hover {
+  border-color: var(--primary-color);
+}
+
+.calendar-overflow {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 /* Table View */
 .warranties-list.table-view {
   display: table;
@@ -3371,6 +3492,29 @@ input.invalid {
     margin-bottom: 5px !important; /* Add back some margin */
     max-width: none !important;
     flex: 0 1 auto !important;
+  }
+
+  .calendar-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .calendar-grid {
+    border-radius: 8px;
+  }
+
+  .calendar-day {
+    min-height: 95px;
+    padding: 6px;
+  }
+
+  .calendar-weekday {
+    font-size: 0.75rem;
+    padding: 8px 6px;
+  }
+
+  .calendar-item {
+    font-size: 0.72rem;
+    padding: 4px 5px;
   }
 }
 

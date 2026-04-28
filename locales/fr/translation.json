@@ -73,6 +73,10 @@
     "no_warranties": "Aucune garantie pour le moment. Ajoutez votre première garantie pour commencer.",
     "search_placeholder": "Rechercher par nom, fournisseurs, notes, étiquette ou numéro de série...",
     "warranty_type": "Type de Garantie",
+    "grid": "Grille",
+    "list": "Liste",
+    "table": "Tableau",
+    "calendar": "Calendrier",
     "other_document": "Autre Document",
     "product": "Produit",
     "expiration": "Expiration",
@@ -422,6 +426,11 @@
     "warranty_type": "Type de Garantie",
     "view": "Vue",
     "scope": "Portée"
+  },
+  "calendar": {
+    "today": "Aujourd'hui",
+    "previous_month": "Mois prÃ©cÃ©dent",
+    "next_month": "Mois suivant"
   },
   "messages": {
     "success": "Succès",

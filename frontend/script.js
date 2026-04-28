@@ -223,6 +223,7 @@ const exportBtn = document.getElementById('exportBtn');
 const gridViewBtn = document.getElementById('gridViewBtn');
 const listViewBtn = document.getElementById('listViewBtn');
 const tableViewBtn = document.getElementById('tableViewBtn');
+const calendarViewBtn = document.getElementById('calendarViewBtn');
 const tableViewHeader = document.querySelector('.table-view-header');
 
 // Admin view controls
@@ -861,7 +862,14 @@ function initializeTheme() {
 
 // Variables
 let currentView = 'grid'; // Default view
+let currentCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let expiringSoonDays = 30; // Default value, will be updated from user preferences
+const ALLOWED_VIEWS = ['grid', 'list', 'table', 'calendar'];
+
+function normalizeViewType(viewType) {
+    if (!viewType || typeof viewType !== 'string') return 'grid';
+    return ALLOWED_VIEWS.includes(viewType) ? viewType : 'grid';
+}
 
 // API URL
 const API_URL = '/api/warranties';
@@ -1897,6 +1905,7 @@ async function exportWarranties() {
 
 // Switch view of warranties list
 async function switchView(viewType, saveToApi = true) { // Added saveToApi parameter with default true
+    viewType = normalizeViewType(viewType);
     console.log(`Switching to view: ${viewType}`);
     currentView = viewType;
 
@@ -1955,20 +1964,20 @@ async function switchView(viewType, saveToApi = true) { // Added saveToApi param
 
     // Make sure warrantiesList exists before modifying classes
     if (warrantiesList) {
-        warrantiesList.classList.remove('grid-view', 'list-view', 'table-view');
+        warrantiesList.classList.remove('grid-view', 'list-view', 'table-view', 'calendar-view');
         warrantiesList.classList.add(`${viewType}-view`);
     }
 
     // Make sure view buttons exist
-    if (gridViewBtn && listViewBtn && tableViewBtn) {
-        gridViewBtn.classList.remove('active');
-        listViewBtn.classList.remove('active');
-        tableViewBtn.classList.remove('active');
-        // Add active class to the correct button
-        if (viewType === 'grid') gridViewBtn.classList.add('active');
-        if (viewType === 'list') listViewBtn.classList.add('active');
-        if (viewType === 'table') tableViewBtn.classList.add('active');
-    }
+    if (gridViewBtn) gridViewBtn.classList.remove('active');
+    if (listViewBtn) listViewBtn.classList.remove('active');
+    if (tableViewBtn) tableViewBtn.classList.remove('active');
+    if (calendarViewBtn) calendarViewBtn.classList.remove('active');
+    // Add active class to the correct button
+    if (viewType === 'grid' && gridViewBtn) gridViewBtn.classList.add('active');
+    if (viewType === 'list' && listViewBtn) listViewBtn.classList.add('active');
+    if (viewType === 'table' && tableViewBtn) tableViewBtn.classList.add('active');
+    if (viewType === 'calendar' && calendarViewBtn) calendarViewBtn.classList.add('active');
     
     // Show/hide table header only if it exists
     if (tableViewHeader) {
@@ -1998,6 +2007,9 @@ async function switchView(viewType, saveToApi = true) { // Added saveToApi param
             } else if (viewType === 'table') {
                 currentViewIcon.classList.add('fa-table');
                 currentViewIcon.setAttribute('aria-label', 'Table');
+            } else if (viewType === 'calendar') {
+                currentViewIcon.classList.add('fa-calendar-days');
+                currentViewIcon.setAttribute('aria-label', 'Calendar');
             } else {
                 currentViewIcon.classList.add('fa-th-large');
                 currentViewIcon.setAttribute('aria-label', 'Grid');
@@ -2030,11 +2042,11 @@ function loadViewPreference() {
     // --- END EDIT ---
 
     // Default to grid view if no preference is saved
-    savedView = savedView || 'grid';
+    savedView = normalizeViewType(savedView || 'grid');
 
     console.log(`Applying view preference from loadViewPreference: ${savedView}`);
     // Switch view only if view buttons exist (implying it's the main page)
-    if (gridViewBtn || listViewBtn || tableViewBtn) {
+    if (gridViewBtn || listViewBtn || tableViewBtn || calendarViewBtn) {
         switchView(savedView, false); // Pass false to prevent API save on initial load
     }
 }
@@ -2723,6 +2735,163 @@ function calculateProductAgeInDays(purchaseDate) {
     return diffDays;
 }
 
+function getCalendarWeekdayLabels() {
+    const formatter = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
+    const mondayBased = [];
+    // Monday 2024-01-01 to Sunday 2024-01-07
+    for (let i = 0; i < 7; i++) {
+        mondayBased.push(formatter.format(new Date(2024, 0, 1 + i)));
+    }
+    return mondayBased;
+}
+
+function getCalendarDateKey(dateObj) {
+    const year = dateObj.getFullYear();
+    const month = `${dateObj.getMonth() + 1}`.padStart(2, '0');
+    const day = `${dateObj.getDate()}`.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function renderCalendarView(sortedWarranties, isArchivedView) {
+    const monthDate = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), 1);
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    const monthLabel = monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+    const firstDayOfMonth = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstWeekdayMondayBased = (firstDayOfMonth.getDay() + 6) % 7;
+    const totalCells = Math.ceil((firstWeekdayMondayBased + daysInMonth) / 7) * 7;
+
+    const itemsByDate = new Map();
+    sortedWarranties.forEach((warranty) => {
+        if (warranty.is_lifetime) return;
+        const expirationDate = warranty.expirationDate instanceof Date
+            ? warranty.expirationDate
+            : (warranty.expiration_date ? new Date(warranty.expiration_date) : null);
+        if (!expirationDate || Number.isNaN(expirationDate.getTime())) return;
+        if (expirationDate.getFullYear() !== year || expirationDate.getMonth() !== month) return;
+
+        const key = getCalendarDateKey(expirationDate);
+        if (!itemsByDate.has(key)) itemsByDate.set(key, []);
+        itemsByDate.get(key).push(warranty);
+    });
+
+    const weekdayLabels = getCalendarWeekdayLabels();
+    const today = new Date();
+    const todayKey = getCalendarDateKey(today);
+    const previousMonthLabel = window.t ? window.t('calendar.previous_month') : 'Previous month';
+    const nextMonthLabel = window.t ? window.t('calendar.next_month') : 'Next month';
+    const todayLabel = window.t ? window.t('calendar.today') : 'Today';
+
+    let cellsHtml = '';
+    for (let cellIndex = 0; cellIndex < totalCells; cellIndex++) {
+        const dayNumber = cellIndex - firstWeekdayMondayBased + 1;
+        const inMonth = dayNumber >= 1 && dayNumber <= daysInMonth;
+        const cellDate = inMonth ? new Date(year, month, dayNumber) : null;
+        const cellKey = inMonth && cellDate ? getCalendarDateKey(cellDate) : null;
+        const dayItems = cellKey ? (itemsByDate.get(cellKey) || []) : [];
+        const isToday = cellKey && cellKey === todayKey;
+
+        const renderedItems = dayItems.slice(0, 3).map((warranty) => {
+            const statusClass = isArchivedView || warranty.is_archived
+                ? 'archived'
+                : (warranty.status === 'expired' ? 'expired' : (warranty.status === 'expiring' ? 'expiring' : 'active'));
+            const productName = escapeHtml(warranty.product_name || 'Unnamed Product');
+            return `
+                <button type="button" class="calendar-item ${statusClass}" data-warranty-id="${warranty.id}" title="${productName}">
+                    ${productName}
+                </button>
+            `;
+        }).join('');
+
+        const remainingCount = dayItems.length > 3 ? `<div class="calendar-overflow">+${dayItems.length - 3}</div>` : '';
+
+        cellsHtml += `
+            <div class="calendar-day ${inMonth ? '' : 'outside-month'} ${isToday ? 'today' : ''}">
+                <div class="calendar-day-number">${inMonth ? dayNumber : ''}</div>
+                <div class="calendar-day-items">
+                    ${renderedItems}
+                    ${remainingCount}
+                </div>
+            </div>
+        `;
+    }
+
+    warrantiesList.innerHTML = `
+        <div class="calendar-toolbar">
+            <button type="button" id="calendarPrevMonthBtn" class="btn btn-secondary btn-sm" aria-label="${escapeHtml(previousMonthLabel)}">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <div class="calendar-month-label">${escapeHtml(monthLabel)}</div>
+            <div class="calendar-toolbar-actions">
+                <button type="button" id="calendarTodayBtn" class="btn btn-secondary btn-sm">${escapeHtml(todayLabel)}</button>
+                <button type="button" id="calendarNextMonthBtn" class="btn btn-secondary btn-sm" aria-label="${escapeHtml(nextMonthLabel)}">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+        <div class="calendar-grid">
+            ${weekdayLabels.map((label) => `<div class="calendar-weekday">${escapeHtml(label)}</div>`).join('')}
+            ${cellsHtml}
+        </div>
+    `;
+
+    const prevBtn = document.getElementById('calendarPrevMonthBtn');
+    const nextBtn = document.getElementById('calendarNextMonthBtn');
+    const todayBtn = document.getElementById('calendarTodayBtn');
+
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            currentCalendarMonth = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth() - 1, 1);
+            applyFilters();
+        });
+    }
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            currentCalendarMonth = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth() + 1, 1);
+            applyFilters();
+        });
+    }
+    if (todayBtn) {
+        todayBtn.addEventListener('click', () => {
+            const now = new Date();
+            currentCalendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            applyFilters();
+        });
+    }
+
+    warrantiesList.querySelectorAll('.calendar-item').forEach((itemBtn) => {
+        itemBtn.addEventListener('click', async () => {
+            const warrantyId = parseInt(itemBtn.dataset.warrantyId, 10);
+            if (!warrantyId) return;
+
+            const warranty = warranties.find((entry) => entry.id === warrantyId);
+            if (!warranty) {
+                showToast(window.t('messages.warranty_not_found_refresh'), 'error');
+                return;
+            }
+
+            const currentUserId = (() => {
+                try {
+                    const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}');
+                    return userInfo.id;
+                } catch (e) {
+                    return null;
+                }
+            })();
+            const isAdmin = getUserType() === 'admin';
+            const canEdit = !isGlobalView || (warranty.user_id === currentUserId) || isAdmin;
+
+            if (canEdit) {
+                await openEditModal(warranty);
+            } else {
+                openClaimsModal(warranty.id);
+            }
+        });
+    });
+}
+
 async function renderWarranties(warrantiesToRender) {
     console.log('renderWarranties called with:', warrantiesToRender);
 
@@ -2737,6 +2906,14 @@ async function renderWarranties(warrantiesToRender) {
     const isArchivedView = currentFilters && currentFilters.status === 'archived';
 
     if (!warrantiesToRender || warrantiesToRender.length === 0) {
+        if (currentView === 'calendar') {
+            warrantiesList.className = `warranties-list calendar-view ${isArchivedView ? 'archived-view' : ''}`;
+            if (tableViewHeader) {
+                tableViewHeader.classList.remove('visible');
+            }
+            renderCalendarView([], isArchivedView);
+            return;
+        }
         renderEmptyState(isArchivedView ? (window.t ? window.t('messages.no_archived_warranties') : 'No archived warranties.') : undefined); // renderEmptyState should also check for warrantiesList or its specific container
         return;
     }
@@ -2786,10 +2963,14 @@ async function renderWarranties(warrantiesToRender) {
     }
     
     // Update view buttons to reflect current view
-    if (gridViewBtn && listViewBtn && tableViewBtn) {
-        gridViewBtn.classList.toggle('active', currentView === 'grid');
-        listViewBtn.classList.toggle('active', currentView === 'list');
-        tableViewBtn.classList.toggle('active', currentView === 'table');
+    if (gridViewBtn) gridViewBtn.classList.toggle('active', currentView === 'grid');
+    if (listViewBtn) listViewBtn.classList.toggle('active', currentView === 'list');
+    if (tableViewBtn) tableViewBtn.classList.toggle('active', currentView === 'table');
+    if (calendarViewBtn) calendarViewBtn.classList.toggle('active', currentView === 'calendar');
+
+    if (currentView === 'calendar') {
+        renderCalendarView(sortedWarranties, isArchivedView);
+        return;
     }
     
     sortedWarranties.forEach(warranty => {
@@ -6214,10 +6395,12 @@ function setupUIEventListeners() {
     const gridViewBtn = document.getElementById('gridViewBtn');
     const listViewBtn = document.getElementById('listViewBtn');
     const tableViewBtn = document.getElementById('tableViewBtn');
+    const calendarViewBtn = document.getElementById('calendarViewBtn');
     
     if (gridViewBtn) gridViewBtn.addEventListener('click', () => switchView('grid'));
     if (listViewBtn) listViewBtn.addEventListener('click', () => switchView('list'));
     if (tableViewBtn) tableViewBtn.addEventListener('click', () => switchView('table'));
+    if (calendarViewBtn) calendarViewBtn.addEventListener('click', () => switchView('calendar'));
     
     // Export button event listener
     const exportBtn = document.getElementById('exportBtn');
@@ -7339,12 +7522,13 @@ window.addEventListener('storage', (event) => {
 
     // Check for view preference changes
     if (viewKeysToWatch.includes(event.key) && event.newValue) {
-        console.log(`Storage event detected for view preference (${event.key}). New value: ${event.newValue}`);
+        const incomingViewType = normalizeViewType(event.newValue);
+        console.log(`Storage event detected for view preference (${event.key}). New value: ${incomingViewType}`);
         // Check if the new value is different from the current view to avoid loops
-        if (event.newValue !== currentView) {
+        if (incomingViewType !== currentView) {
              // Ensure view buttons exist before switching (we're on the main page)
-             if (gridViewBtn || listViewBtn || tableViewBtn) {
-                 switchView(event.newValue, false); // Apply change, don't re-save to API
+             if (gridViewBtn || listViewBtn || tableViewBtn || calendarViewBtn) {
+                 switchView(incomingViewType, false); // Apply change, don't re-save to API
              }
         } else {
              console.log('Storage event value matches current view, ignoring.');

@@ -53,6 +53,7 @@ This fork includes all upstream functionality plus the following important addit
 - translation fallback behavior hardened
 - service worker caching behavior improved for language/update consistency
 - missing translation keys filled for new notification-email UI
+- new monthly Calendar view for warranties (with month navigation and day grouping)
 
 ### HTTPS in Container
 
@@ -219,8 +220,15 @@ Use `Docker/.env.example` as baseline. The list below includes variables used by
 - Additional notification emails can be attached to a warranty.
 - Multiple additional recipients are supported in this fork.
 - Additional recipients receive the same warranty notification list, but greeting is based on the recipient profile (no owner-name leakage).
-- Per-warranty `reminder_days` overrides user-level `expiring_soon_days` for that warranty.
+- Per-warranty `reminder_days` (example: `30,7,1`) overrides user-level `expiring_soon_days` for that warranty.
 - If owner account is removed and warranty is detached, notification fallback can target owner/admin recipient logic.
+
+## Calendar View
+
+- Available in the main warranties page via `View -> Calendar`.
+- Displays warranties by expiration date in a monthly grid.
+- Supports previous/next month navigation and a quick `Today` action.
+- Uses the same underlying filters/scope as Grid/List/Table views.
 
 ## Email Template Structure (i18n)
 
