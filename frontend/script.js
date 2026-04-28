@@ -2780,6 +2780,9 @@ function renderCalendarView(sortedWarranties, isArchivedView) {
     const weekdayLabels = getCalendarWeekdayLabels();
     const today = new Date();
     const todayKey = getCalendarDateKey(today);
+    const previousMonthLabel = window.t ? window.t('calendar.previous_month') : 'Previous month';
+    const nextMonthLabel = window.t ? window.t('calendar.next_month') : 'Next month';
+    const todayLabel = window.t ? window.t('calendar.today') : 'Today';
 
     let cellsHtml = '';
     for (let cellIndex = 0; cellIndex < totalCells; cellIndex++) {
@@ -2817,13 +2820,13 @@ function renderCalendarView(sortedWarranties, isArchivedView) {
 
     warrantiesList.innerHTML = `
         <div class="calendar-toolbar">
-            <button type="button" id="calendarPrevMonthBtn" class="btn btn-secondary btn-sm" aria-label="Previous month">
+            <button type="button" id="calendarPrevMonthBtn" class="btn btn-secondary btn-sm" aria-label="${escapeHtml(previousMonthLabel)}">
                 <i class="fas fa-chevron-left"></i>
             </button>
             <div class="calendar-month-label">${escapeHtml(monthLabel)}</div>
             <div class="calendar-toolbar-actions">
-                <button type="button" id="calendarTodayBtn" class="btn btn-secondary btn-sm">Today</button>
-                <button type="button" id="calendarNextMonthBtn" class="btn btn-secondary btn-sm" aria-label="Next month">
+                <button type="button" id="calendarTodayBtn" class="btn btn-secondary btn-sm">${escapeHtml(todayLabel)}</button>
+                <button type="button" id="calendarNextMonthBtn" class="btn btn-secondary btn-sm" aria-label="${escapeHtml(nextMonthLabel)}">
                     <i class="fas fa-chevron-right"></i>
                 </button>
             </div>
