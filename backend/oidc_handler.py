@@ -99,18 +99,6 @@ def _group_matches(required_group, user_groups):
     return False
 
 
-def _claim_to_bool(value):
-    """Convert OIDC claim values to bool safely (handles bool/string/int)."""
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return False
-    if isinstance(value, (int, float)):
-        return value != 0
-    if isinstance(value, str):
-        return value.strip().lower() in ('true', '1', 'yes', 'y', 'on')
-    return False
-
 def init_oidc_client(current_app_instance, db_conn_func, db_release_func):
     """Function to initialize OIDC client based on settings"""
     from .extensions import oauth
@@ -360,44 +348,19 @@ def oidc_callback_route():
                     existing_oidc_issuer = existing_email_user[7]
                     if existing_oidc_sub and existing_oidc_issuer:
                         if existing_oidc_sub != oidc_subject or existing_oidc_issuer != oidc_issuer:
-                            email_verified_claim = token_id_claims.get('email_verified')
-                            if email_verified_claim is None:
-                                email_verified_claim = userinfo.get('email_verified')
-                            email_verified = _claim_to_bool(email_verified_claim)
-
-                            if email_verified:
-                                cur.execute(
-                                    "UPDATE users SET oidc_sub = %s, oidc_issuer = %s, is_active = TRUE WHERE id = %s",
-                                    (oidc_subject, oidc_issuer, existing_user_id)
-                                )
-                                logger.warning(
-                                    "[OIDC_HANDLER] Auto-relinked existing OIDC account by email "
-                                    f"(user_id={existing_user_id}, email={email}) from sub={existing_oidc_sub}, iss={existing_oidc_issuer} "
-                                    f"to sub={oidc_subject}, iss={oidc_issuer}."
-                                )
-                                user_db_data = existing_email_user[:6]
-                            else:
-                                logger.warning(
-                                    f"[OIDC_HANDLER] Email {email} belongs to another OIDC identity (user_id={existing_user_id}). "
-                                    f"Incoming sub={oidc_subject}, iss={oidc_issuer}, existing sub={existing_oidc_sub}, iss={existing_oidc_issuer}. "
-                                    "Automatic relink refused because email_verified is false/missing."
-                                )
-                                frontend_login_url = os.environ.get('FRONTEND_URL', 'http://localhost:8080').rstrip('/') + "/login.html"
-                                return redirect(f"{frontend_login_url}?oidc_error=email_conflict_existing_account")
+                            cur.execute(
+                                "UPDATE users SET oidc_sub = %s, oidc_issuer = %s, is_active = TRUE WHERE id = %s",
+                                (oidc_subject, oidc_issuer, existing_user_id)
+                            )
+                            logger.warning(
+                                "[OIDC_HANDLER] Auto-relinked existing OIDC account by email "
+                                f"(user_id={existing_user_id}, email={email}) from sub={existing_oidc_sub}, iss={existing_oidc_issuer} "
+                                f"to sub={oidc_subject}, iss={oidc_issuer}."
+                            )
+                            user_db_data = existing_email_user[:6]
                         # Already linked to same identity; continue as existing user flow.
                         user_db_data = existing_email_user[:6]
                     else:
-                        email_verified_claim = token_id_claims.get('email_verified')
-                        if email_verified_claim is None:
-                            email_verified_claim = userinfo.get('email_verified')
-                        email_verified = _claim_to_bool(email_verified_claim)
-                        if not email_verified:
-                            logger.warning(
-                                f"[OIDC_HANDLER] Refusing auto-link for {email}: email_verified claim is false/missing."
-                            )
-                            frontend_login_url = os.environ.get('FRONTEND_URL', 'http://localhost:8080').rstrip('/') + "/login.html"
-                            return redirect(f"{frontend_login_url}?oidc_error=email_not_verified_for_link")
-
                         cur.execute(
                             "UPDATE users SET oidc_sub = %s, oidc_issuer = %s, is_active = TRUE WHERE id = %s",
                             (oidc_subject, oidc_issuer, existing_user_id)
