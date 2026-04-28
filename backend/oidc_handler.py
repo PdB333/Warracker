@@ -98,6 +98,19 @@ def _group_matches(required_group, user_groups):
             return True
     return False
 
+
+def _claim_to_bool(value):
+    """Convert OIDC claim values to bool safely (handles bool/string/int)."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in ('true', '1', 'yes', 'y', 'on')
+    return False
+
 def init_oidc_client(current_app_instance, db_conn_func, db_release_func):
     """Function to initialize OIDC client based on settings"""
     from .extensions import oauth
@@ -193,7 +206,10 @@ def oidc_login_route():
         redirect_uri = redirect_uri.replace('http://', 'https://', 1)
 
     logger.info(f"[OIDC_HANDLER] /oidc/login redirect_uri: {redirect_uri}")
-    return oauth.create_client(oidc_provider_name).authorize_redirect(redirect_uri)
+    # Persist nonce for ID token validation in callback
+    nonce = uuid.uuid4().hex
+    session['oidc_nonce'] = nonce
+    return oauth.create_client(oidc_provider_name).authorize_redirect(redirect_uri, nonce=nonce)
 
 @oidc_bp.route('/oidc/callback') # Original path was /api/oidc/callback
 def oidc_callback_route():
@@ -225,7 +241,12 @@ def oidc_callback_route():
     id_token_claims = {}
     if token_data.get('id_token'):
         try:
-            parsed_id_token = client.parse_id_token(token_data)
+            expected_nonce = session.pop('oidc_nonce', None)
+            if expected_nonce:
+                parsed_id_token = client.parse_id_token(token_data, nonce=expected_nonce)
+            else:
+                logger.warning("[OIDC_HANDLER] Missing stored nonce in callback session; parsing id_token without nonce validation.")
+                parsed_id_token = client.parse_id_token(token_data)
             if parsed_id_token:
                 # Authlib may return a mapping-like claims object
                 id_token_claims = dict(parsed_id_token)
@@ -321,6 +342,52 @@ def oidc_callback_route():
                         "[OIDC_HANDLER] No groups/roles claim found for this login. "
                         "If using Keycloak, include group/role mappers and add 'groups' (or role claims) in the token/userinfo."
                     )
+
+            if not user_db_data and email:
+                # Auto-link mode: if a local account already exists with the same email,
+                # bind it to this OIDC identity instead of blocking login.
+                cur.execute("""
+                    SELECT id, username, email, first_name, last_name, is_admin, oidc_sub, oidc_issuer, is_active
+                    FROM users
+                    WHERE LOWER(email) = LOWER(%s)
+                    LIMIT 1
+                """, (email,))
+                existing_email_user = cur.fetchone()
+
+                if existing_email_user:
+                    existing_user_id = existing_email_user[0]
+                    existing_oidc_sub = existing_email_user[6]
+                    existing_oidc_issuer = existing_email_user[7]
+
+                    if existing_oidc_sub and existing_oidc_issuer:
+                        if existing_oidc_sub != oidc_subject or existing_oidc_issuer != oidc_issuer:
+                            logger.warning(
+                                f"[OIDC_HANDLER] Email {email} belongs to another OIDC identity (user_id={existing_user_id})."
+                            )
+                            frontend_login_url = os.environ.get('FRONTEND_URL', 'http://localhost:8080').rstrip('/') + "/login.html"
+                            return redirect(f"{frontend_login_url}?oidc_error=email_conflict_existing_account")
+                        # Already linked to same identity; continue as existing user flow.
+                        user_db_data = existing_email_user[:6]
+                    else:
+                        email_verified_claim = token_id_claims.get('email_verified')
+                        if email_verified_claim is None:
+                            email_verified_claim = userinfo.get('email_verified')
+                        email_verified = _claim_to_bool(email_verified_claim)
+                        if not email_verified:
+                            logger.warning(
+                                f"[OIDC_HANDLER] Refusing auto-link for {email}: email_verified claim is false/missing."
+                            )
+                            frontend_login_url = os.environ.get('FRONTEND_URL', 'http://localhost:8080').rstrip('/') + "/login.html"
+                            return redirect(f"{frontend_login_url}?oidc_error=email_not_verified_for_link")
+
+                        cur.execute(
+                            "UPDATE users SET oidc_sub = %s, oidc_issuer = %s, is_active = TRUE WHERE id = %s",
+                            (oidc_subject, oidc_issuer, existing_user_id)
+                        )
+                        logger.info(
+                            f"[OIDC_HANDLER] Auto-linked existing user ID {existing_user_id} ({email}) to OIDC subject {oidc_subject}."
+                        )
+                        user_db_data = existing_email_user[:6]
 
             if user_db_data:
                 user_id = user_db_data[0]
