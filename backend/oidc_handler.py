@@ -358,14 +358,34 @@ def oidc_callback_route():
                     existing_user_id = existing_email_user[0]
                     existing_oidc_sub = existing_email_user[6]
                     existing_oidc_issuer = existing_email_user[7]
+                    allow_email_relink = os.environ.get('OIDC_ALLOW_EMAIL_RELINK', 'false').strip().lower() == 'true'
 
                     if existing_oidc_sub and existing_oidc_issuer:
                         if existing_oidc_sub != oidc_subject or existing_oidc_issuer != oidc_issuer:
-                            logger.warning(
-                                f"[OIDC_HANDLER] Email {email} belongs to another OIDC identity (user_id={existing_user_id})."
-                            )
-                            frontend_login_url = os.environ.get('FRONTEND_URL', 'http://localhost:8080').rstrip('/') + "/login.html"
-                            return redirect(f"{frontend_login_url}?oidc_error=email_conflict_existing_account")
+                            email_verified_claim = token_id_claims.get('email_verified')
+                            if email_verified_claim is None:
+                                email_verified_claim = userinfo.get('email_verified')
+                            email_verified = _claim_to_bool(email_verified_claim)
+
+                            if allow_email_relink and email_verified:
+                                cur.execute(
+                                    "UPDATE users SET oidc_sub = %s, oidc_issuer = %s, is_active = TRUE WHERE id = %s",
+                                    (oidc_subject, oidc_issuer, existing_user_id)
+                                )
+                                logger.warning(
+                                    "[OIDC_HANDLER] Auto-relinked existing OIDC account by email "
+                                    f"(user_id={existing_user_id}, email={email}) from sub={existing_oidc_sub}, iss={existing_oidc_issuer} "
+                                    f"to sub={oidc_subject}, iss={oidc_issuer} because OIDC_ALLOW_EMAIL_RELINK=true."
+                                )
+                                user_db_data = existing_email_user[:6]
+                            else:
+                                logger.warning(
+                                    f"[OIDC_HANDLER] Email {email} belongs to another OIDC identity (user_id={existing_user_id}). "
+                                    f"Incoming sub={oidc_subject}, iss={oidc_issuer}, existing sub={existing_oidc_sub}, iss={existing_oidc_issuer}. "
+                                    f"Set OIDC_ALLOW_EMAIL_RELINK=true to allow automatic relink."
+                                )
+                                frontend_login_url = os.environ.get('FRONTEND_URL', 'http://localhost:8080').rstrip('/') + "/login.html"
+                                return redirect(f"{frontend_login_url}?oidc_error=email_conflict_existing_account")
                         # Already linked to same identity; continue as existing user flow.
                         user_db_data = existing_email_user[:6]
                     else:
