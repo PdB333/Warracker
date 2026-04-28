@@ -1,4 +1,4 @@
-const CACHE_NAME = 'warracker-cache-v20260423003';
+const CACHE_NAME = 'warracker-cache-v20260428001';
 const urlsToCache = [
   // HTML pages
   './',
@@ -14,13 +14,13 @@ const urlsToCache = [
   './auth-redirect.html',
 
   // Stylesheets (versioned)
-  './style.css?v=20250119004',
+  './style.css?v=20260428001',
   './settings-styles.css?v=20250119001',
   './header-fix.css?v=20250119001',
   './mobile-header.css?v=20250119002',
 
   // JavaScript (versioned)
-  './script.js?v=20260423002',
+  './script.js?v=20260428001',
   './auth.js?v=20250119001',
   './settings-new.js?v=20260423002',
   './status.js?v=20260421001',
